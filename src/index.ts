@@ -1,32 +1,13 @@
-import express from "express";
-import cors from "cors";
-import helmet from "helmet";
-import rateLimit from "express-rate-limit";
-import dotenv from "dotenv";
-
-import { transactionRoutes } from "./routes/transactions";
-import { bulkRoutes } from "./routes/bulk";
-import {
-  transactionDisputeRoutes,
-  disputeRoutes,
-} from "./routes/disputes";
-import { errorHandler } from "./middleware/errorHandler";
-import { connectRedis, redisClient } from "./config/redis";
-import { pool } from "./config/database";
-import {
-  globalTimeout,
-  haltOnTimedout,
-  timeoutErrorHandler,
-} from "./middleware/timeout";
-import {
-  createQueueDashboard,
-  getQueueHealth,
-  pauseQueueEndpoint,
-  resumeQueueEndpoint,
-} from "./queue";
-
-import { register } from "./utils/metrics";
-import { metricsMiddleware } from "./middleware/metrics";
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import dotenv from 'dotenv';
+import { transactionRoutes } from './routes/transactions';
+import { errorHandler } from './middleware/errorHandler';
+import { connectRedis } from './config/redis';
+import { globalTimeout, haltOnTimedout, timeoutErrorHandler } from './middleware/timeout';
+import { responseTime } from './middleware/responseTime';
 
 dotenv.config();
 
@@ -40,84 +21,22 @@ const limiter = rateLimit({
 });
 
 // Middleware
-app.use(metricsMiddleware); // Register metrics middleware early
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
 app.use(limiter);
 
-// Prometheus metrics endpoint
-app.get("/metrics", async (req, res) => {
-  try {
-    res.set("Content-Type", register.contentType);
-    res.end(await register.metrics());
-  } catch (err) {
-    res.status(500).end(err);
-  }
-});
+// Global timeout configuration
+app.use(responseTime);
+app.use(globalTimeout);
+app.use(haltOnTimedout);
 
 // Basic health check
 app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-/**
- * Readiness probe (DB + Redis)
- */
-app.get("/ready", async (req, res) => {
-  const checks: Record<string, string> = {
-    database: "down",
-    redis: "down",
-  };
-
-  let allReady = true;
-
-  try {
-    await pool.query("SELECT 1");
-    checks.database = "ok";
-  } catch (err) {
-    console.error("Database check failed", err);
-    checks.database = "error";
-    allReady = false;
-  }
-
-  try {
-    if (redisClient?.isOpen) {
-      await redisClient.ping();
-      checks.redis = "ok";
-    } else {
-      checks.redis = "closed";
-      allReady = false;
-    }
-  } catch (err) {
-    console.error("Redis check failed", err);
-    checks.redis = "error";
-    allReady = false;
-  }
-
-  const response = {
-    status: allReady ? "ready" : "not ready",
-    checks,
-    timestamp: new Date().toISOString(),
-  };
-
-  res.status(allReady ? 200 : 503).json(response);
-});
-
-// Timeout middleware
-app.use(globalTimeout);
-app.use(haltOnTimedout);
-
-// Routes
-app.use("/api/transactions", transactionRoutes);
-app.use("/api/transactions", transactionDisputeRoutes);
-app.use("/api/transactions/bulk", bulkRoutes);
-app.use("/api/disputes", disputeRoutes);
-
-// Queue health check
-app.get("/health/queue", getQueueHealth);
-app.post("/admin/queues/pause", pauseQueueEndpoint);
-app.post("/admin/queues/resume", resumeQueueEndpoint);
+app.use('/api/transactions', transactionRoutes);
 
 // Timeout error handler (must be before general error handler)
 app.use(timeoutErrorHandler);
@@ -132,10 +51,6 @@ connectRedis()
     console.error("Failed to connect to Redis:", err);
     console.warn("Distributed locks will not be available");
   });
-
-// Initialize queue dashboard
-const queueRouter = createQueueDashboard();
-app.use("/admin/queues", queueRouter);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
