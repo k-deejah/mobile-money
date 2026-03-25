@@ -1,10 +1,10 @@
-import { pool } from '../config/database';
+import { pool } from "../config/database";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export type DisputeStatus = 'open' | 'investigating' | 'resolved' | 'rejected';
+export type DisputeStatus = "open" | "investigating" | "resolved" | "rejected";
 
 export interface Dispute {
   id: string;
@@ -74,7 +74,7 @@ export class DisputeModel {
          reported_by     AS "reportedBy",
          created_at      AS "createdAt",
          updated_at      AS "updatedAt"`,
-      [input.transactionId, input.reason, input.reportedBy ?? null]
+      [input.transactionId, input.reason, input.reportedBy ?? null],
     );
     return result.rows[0];
   }
@@ -94,7 +94,7 @@ export class DisputeModel {
          updated_at      AS "updatedAt"
        FROM disputes
        WHERE id = $1`,
-      [disputeId]
+      [disputeId],
     );
     return result.rows[0] ?? null;
   }
@@ -114,7 +114,7 @@ export class DisputeModel {
          updated_at      AS "updatedAt"
        FROM disputes
        WHERE id = $1`,
-      [disputeId]
+      [disputeId],
     );
 
     if (!disputeResult.rows[0]) return null;
@@ -129,14 +129,16 @@ export class DisputeModel {
        FROM dispute_notes
        WHERE dispute_id = $1
        ORDER BY created_at ASC`,
-      [disputeId]
+      [disputeId],
     );
 
     return { ...disputeResult.rows[0], notes: notesResult.rows };
   }
 
   /** Find active (open/investigating) dispute for a transaction. */
-  async findActiveByTransactionId(transactionId: string): Promise<Dispute | null> {
+  async findActiveByTransactionId(
+    transactionId: string,
+  ): Promise<Dispute | null> {
     const result = await pool.query<Dispute>(
       `SELECT
          id,
@@ -152,7 +154,7 @@ export class DisputeModel {
        WHERE transaction_id = $1
          AND status IN ('open', 'investigating')
        LIMIT 1`,
-      [transactionId]
+      [transactionId],
     );
     return result.rows[0] ?? null;
   }
@@ -176,7 +178,12 @@ export class DisputeModel {
          reported_by     AS "reportedBy",
          created_at      AS "createdAt",
          updated_at      AS "updatedAt"`,
-      [disputeId, input.status, input.resolution ?? null, input.assignedTo ?? null]
+      [
+        disputeId,
+        input.status,
+        input.resolution ?? null,
+        input.assignedTo ?? null,
+      ],
     );
     return result.rows[0];
   }
@@ -197,13 +204,17 @@ export class DisputeModel {
          reported_by     AS "reportedBy",
          created_at      AS "createdAt",
          updated_at      AS "updatedAt"`,
-      [disputeId, agentName]
+      [disputeId, agentName],
     );
     return result.rows[0];
   }
 
   /** Add a note/comment to a dispute. */
-  async addNote(disputeId: string, author: string, note: string): Promise<DisputeNote> {
+  async addNote(
+    disputeId: string,
+    author: string,
+    note: string,
+  ): Promise<DisputeNote> {
     const result = await pool.query<DisputeNote>(
       `INSERT INTO dispute_notes (dispute_id, author, note)
        VALUES ($1, $2, $3)
@@ -213,7 +224,7 @@ export class DisputeModel {
          author,
          note,
          created_at  AS "createdAt"`,
-      [disputeId, author, note]
+      [disputeId, author, note],
     );
     return result.rows[0];
   }
@@ -237,7 +248,8 @@ export class DisputeModel {
       params.push(filter.assignedTo);
     }
 
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const where =
+      conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
     const result = await pool.query<DisputeReportRow>(
       `SELECT
@@ -254,7 +266,7 @@ export class DisputeModel {
        ${where}
        GROUP BY status
        ORDER BY status`,
-      params
+      params,
     );
 
     return result.rows;

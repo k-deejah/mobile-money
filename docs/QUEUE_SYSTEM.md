@@ -5,6 +5,7 @@ This document describes the queue system implemented using BullMQ for reliable a
 ## Overview
 
 The queue system provides:
+
 - **Reliable Processing**: Jobs are persisted in Redis and processed asynchronously
 - **Automatic Retries**: Failed jobs are automatically retried up to 3 times with exponential backoff
 - **Progress Tracking**: Real-time job progress updates
@@ -27,48 +28,48 @@ The queue system provides:
 
 ## Queue Files
 
-| File | Description |
-|------|-------------|
-| [`src/queue/config.ts`](src/queue/config.ts) | Queue configuration and Redis connection |
+| File                                                             | Description                                   |
+| ---------------------------------------------------------------- | --------------------------------------------- |
+| [`src/queue/config.ts`](src/queue/config.ts)                     | Queue configuration and Redis connection      |
 | [`src/queue/transactionQueue.ts`](src/queue/transactionQueue.ts) | Queue definition and job management functions |
-| [`src/queue/worker.ts`](src/queue/worker.ts) | Worker that processes jobs |
-| [`src/queue/dashboard.ts`](src/queue/dashboard.ts) | Bull Board dashboard integration |
-| [`src/queue/health.ts`](src/queue/health.ts) | Queue health check endpoints |
-| [`src/queue/index.ts`](src/queue/index.ts) | Public exports |
+| [`src/queue/worker.ts`](src/queue/worker.ts)                     | Worker that processes jobs                    |
+| [`src/queue/dashboard.ts`](src/queue/dashboard.ts)               | Bull Board dashboard integration              |
+| [`src/queue/health.ts`](src/queue/health.ts)                     | Queue health check endpoints                  |
+| [`src/queue/index.ts`](src/queue/index.ts)                       | Public exports                                |
 
 ## Usage
 
 ### Adding a Transaction Job
 
 ```typescript
-import { addTransactionJob } from './queue';
+import { addTransactionJob } from "./queue";
 
 const job = await addTransactionJob({
-  transactionId: 'tx-123',
-  type: 'deposit',
-  amount: '100',
-  phoneNumber: '+1234567890',
-  provider: 'mtn',
-  stellarAddress: 'GABC123...',
+  transactionId: "tx-123",
+  type: "deposit",
+  amount: "100",
+  phoneNumber: "+1234567890",
+  provider: "mtn",
+  stellarAddress: "GABC123...",
 });
 
 // Get job ID for tracking
-console.log('Job ID:', job.id);
+console.log("Job ID:", job.id);
 ```
 
 ### Checking Job Progress
 
 ```typescript
-import { getJobProgress } from './queue';
+import { getJobProgress } from "./queue";
 
-const progress = await getJobProgress('job-id');
+const progress = await getJobProgress("job-id");
 console.log(`Progress: ${progress}%`);
 ```
 
 ### Getting Queue Stats
 
 ```typescript
-import { getQueueStats } from './queue';
+import { getQueueStats } from "./queue";
 
 const stats = await getQueueStats();
 console.log(stats);
@@ -77,12 +78,12 @@ console.log(stats);
 
 ## API Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/health/queue` | Get queue health status |
-| POST | `/admin/queues/pause` | Pause the queue |
-| POST | `/admin/queues/resume` | Resume the queue |
-| GET | `/admin/queues` | Bull Board dashboard |
+| Method | Endpoint               | Description             |
+| ------ | ---------------------- | ----------------------- |
+| GET    | `/health/queue`        | Get queue health status |
+| POST   | `/admin/queues/pause`  | Pause the queue         |
+| POST   | `/admin/queues/resume` | Resume the queue        |
+| GET    | `/admin/queues`        | Bull Board dashboard    |
 
 ## Configuration
 
@@ -137,6 +138,7 @@ The queue is configured with the following default options:
 ### Automatic Retries
 
 Failed jobs are automatically retried with exponential backoff:
+
 - Attempt 1: After 2 seconds
 - Attempt 2: After 4 seconds
 - Attempt 3: After 8 seconds
@@ -150,6 +152,7 @@ Failed jobs can be manually retried via the dashboard or API.
 ### Bull Board Dashboard
 
 Access the dashboard at `/admin/queues` to:
+
 - View all queues (waiting, active, completed, failed)
 - View individual job details
 - Retry failed jobs
@@ -183,7 +186,7 @@ The transaction controller has been updated to use the queue:
 // Deposit - adds job to queue instead of processing immediately
 const result = await addTransactionJob({
   transactionId: transaction.id,
-  type: 'deposit',
+  type: "deposit",
   amount,
   phoneNumber,
   provider,
@@ -191,10 +194,10 @@ const result = await addTransactionJob({
 });
 
 // Response includes job ID for progress tracking
-res.json({ 
-  transactionId, 
-  referenceNumber, 
-  status: 'pending',
+res.json({
+  transactionId,
+  referenceNumber,
+  status: "pending",
   jobId: job.id,
 });
 ```

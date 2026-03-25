@@ -14,7 +14,11 @@ function loggedPath(req: Request): string {
  * and does not log headers or body, so API keys, tokens, and secrets in
  * URLs or payloads are not written to logs.
  */
-export function requestLogger(req: Request, res: Response, next: NextFunction): void {
+export function requestLogger(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
   const start = process.hrtime.bigint();
   let logged = false;
 

@@ -34,35 +34,35 @@ jobs:
         run: |
           echo "Validating required environment variables..."
           MISSING_VARS=()
-          
+
           # Check required environment variables
           [ -z "${{ secrets.DATABASE_URL }}" ] && MISSING_VARS+=("DATABASE_URL")
           [ -z "${{ secrets.REDIS_URL }}" ] && MISSING_VARS+=("REDIS_URL")
           [ -z "${{ secrets.STELLAR_NETWORK }}" ] && MISSING_VARS+=("STELLAR_NETWORK")
           [ -z "${{ secrets.STELLAR_HORIZON_URL }}" ] && MISSING_VARS+=("STELLAR_HORIZON_URL")
           [ -z "${{ secrets.STELLAR_ISSUER_SECRET }}" ] && MISSING_VARS+=("STELLAR_ISSUER_SECRET")
-          
+
           if [ ${#MISSING_VARS[@]} -ne 0 ]; then
             echo "Error: Missing required environment variables:"
             printf '  - %s\n' "${MISSING_VARS[@]}"
             exit 1
           fi
-          
+
           echo "✅ All required environment variables are present"
 
       - name: Deploy to staging
         run: |
           echo "Deploying to staging environment..."
-          
+
           # Stop existing containers if running
           docker compose -f docker-compose.yml down || true
-          
+
           # Set the image tag to use the commit SHA
           export IMAGE_TAG=${{ github.event.workflow_run.head_sha }}
-          
+
           # Deploy using docker-compose with the pulled image
           docker compose -f docker-compose.yml up -d
-          
+
           echo "✅ Deployment initiated successfully"
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -82,16 +82,16 @@ jobs:
       - name: Health check verification
         run: |
           echo "Starting health check verification..."
-          
+
           STAGING_URL="${{ secrets.STAGING_URL }}"
           HEALTH_ENDPOINT="${STAGING_URL}/health/lb"
           TIMEOUT=300  # 5 minutes in seconds
           INTERVAL=10  # 10 seconds between checks
           ELAPSED=0
-          
+
           echo "Health check endpoint: ${HEALTH_ENDPOINT}"
           echo "Timeout: ${TIMEOUT}s, Interval: ${INTERVAL}s"
-          
+
           while [ $ELAPSED -lt $TIMEOUT ]; do
             echo "Checking health (attempt $((ELAPSED / INTERVAL + 1)))..."
             
@@ -113,7 +113,7 @@ jobs:
             sleep $INTERVAL
             ELAPSED=$((ELAPSED + INTERVAL))
           done
-          
+
           echo "Health check failed: Timeout after ${TIMEOUT}s"
           echo "Fetching container logs for debugging..."
           docker compose -f docker-compose.yml logs --tail=50
@@ -126,10 +126,10 @@ jobs:
           echo "Commit SHA: ${{ github.event.workflow_run.head_sha }}"
           echo "Triggered by: ${{ github.event.workflow_run.head_commit.author.name }}"
           echo "Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          
+
           # In a real scenario, this would send notifications via Slack, email, etc.
           # Example: curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} -d '{"text":"Deployment failed!"}'
-          
+
           echo "Collecting diagnostic information..."
           docker compose -f docker-compose.yml ps
           docker compose -f docker-compose.yml logs --tail=100

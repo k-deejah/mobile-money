@@ -3,6 +3,7 @@
 This directory contains the manifests required to deploy the Mobile Money to Stellar bridge on a Kubernetes cluster.
 
 ## Prerequisites
+
 - A running Kubernetes cluster (Minikube, EKS, GKE, etc.)
 - `kubectl` configured to point to your cluster.
 - A PostgreSQL instance accessible from the cluster.
@@ -22,6 +23,7 @@ This directory contains the manifests required to deploy the Mobile Money to Ste
     kubectl get pods -l app=mobile-money
     kubectl get svc mobile-money-service
    ```
-## Autoscaling
-The Horizontal Pod Autoscaler is configured to scale between 2 and 10 replicas based on a target CPU utilization of 80%.
 
+## Autoscaling
+
+The Horizontal Pod Autoscaler is configured to scale between 2 and 10 replicas based on a target CPU utilization of 80%.

@@ -1,6 +1,7 @@
 # Request Timeout Quick Start
 
 ## Installation
+
 ```bash
 npm install connect-timeout@^1.9.0
 npm install --save-dev @types/connect-timeout@^0.0.38
@@ -9,15 +10,23 @@ npm install --save-dev @types/connect-timeout@^0.0.38
 ## Basic Setup
 
 ### 1. Configure Environment
+
 Add to `.env`:
+
 ```env
 REQUEST_TIMEOUT_MS=30000
 ```
 
 ### 2. Apply Global Timeout
+
 Already configured in `src/index.ts`:
+
 ```typescript
-import { globalTimeout, haltOnTimedout, timeoutErrorHandler } from './middleware/timeout';
+import {
+  globalTimeout,
+  haltOnTimedout,
+  timeoutErrorHandler,
+} from "./middleware/timeout";
 
 app.use(globalTimeout);
 app.use(haltOnTimedout);
@@ -26,27 +35,30 @@ app.use(timeoutErrorHandler);
 ```
 
 ### 3. Override Per Route
+
 ```typescript
-import { TimeoutPresets, haltOnTimedout } from '../middleware/timeout';
+import { TimeoutPresets, haltOnTimedout } from "../middleware/timeout";
 
 // 5 second timeout
-router.get('/quick', TimeoutPresets.quick, haltOnTimedout, handler);
+router.get("/quick", TimeoutPresets.quick, haltOnTimedout, handler);
 
 // 60 second timeout
-router.post('/long', TimeoutPresets.long, haltOnTimedout, handler);
+router.post("/long", TimeoutPresets.long, haltOnTimedout, handler);
 
 // Custom timeout
-import { customTimeout } from '../middleware/timeout';
-router.post('/custom', customTimeout(45000), haltOnTimedout, handler);
+import { customTimeout } from "../middleware/timeout";
+router.post("/custom", customTimeout(45000), haltOnTimedout, handler);
 ```
 
 ## Available Presets
+
 - `TimeoutPresets.quick` - 5 seconds
 - `TimeoutPresets.standard` - 30 seconds
 - `TimeoutPresets.long` - 60 seconds
 - `TimeoutPresets.extended` - 120 seconds
 
 ## Response on Timeout
+
 ```json
 {
   "error": "Request Timeout",
@@ -54,9 +66,11 @@ router.post('/custom', customTimeout(45000), haltOnTimedout, handler);
   "code": "REQUEST_TIMEOUT"
 }
 ```
+
 Status: `408 Request Timeout`
 
 ## Testing
+
 ```bash
 # Start server
 npm run dev
@@ -70,11 +84,13 @@ curl -X POST http://localhost:3000/api/transactions/deposit \
 ## Common Issues
 
 **Timeout not working?**
+
 - Check middleware order (timeout must be before routes)
 - Ensure `haltOnTimedout` is used
 - Verify `timeoutErrorHandler` is before general error handler
 
 **Requests timing out too fast?**
+
 - Increase `REQUEST_TIMEOUT_MS` in .env
 - Use longer preset for specific routes
 - Check for slow operations (database, external APIs)

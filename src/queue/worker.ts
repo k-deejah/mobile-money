@@ -65,7 +65,10 @@ export const transactionWorker = new Worker<
 
         await job.updateProgress(90);
 
-        await transactionModel.updateStatus(transactionId, TransactionStatus.Completed);
+        await transactionModel.updateStatus(
+          transactionId,
+          TransactionStatus.Completed,
+        );
 
         await job.updateProgress(100);
 
@@ -96,7 +99,10 @@ export const transactionWorker = new Worker<
 
         await job.updateProgress(90);
 
-        await transactionModel.updateStatus(transactionId, TransactionStatus.Completed);
+        await transactionModel.updateStatus(
+          transactionId,
+          TransactionStatus.Completed,
+        );
 
         await job.updateProgress(100);
 
@@ -111,7 +117,10 @@ export const transactionWorker = new Worker<
       }
     } catch (error) {
       console.error(`[${job.id}] Transaction failed:`, error);
-      await transactionModel.updateStatus(transactionId, TransactionStatus.Failed);
+      await transactionModel.updateStatus(
+        transactionId,
+        TransactionStatus.Failed,
+      );
       throw error;
     }
   },

@@ -28,21 +28,21 @@ import {
   DisputeReportRow,
   DisputeStatus,
   ReportFilter,
-} from '../models/dispute';
-import { TransactionModel } from '../models/transaction';
+} from "../models/dispute";
+import { TransactionModel } from "../models/transaction";
 
 // ---------------------------------------------------------------------------
 // Allowed status transitions
 // ---------------------------------------------------------------------------
 
 const TRANSITIONS: Record<DisputeStatus, DisputeStatus[]> = {
-  open:          ['investigating', 'resolved', 'rejected'],
-  investigating: ['resolved', 'rejected'],
-  resolved:      [],
-  rejected:      [],
+  open: ["investigating", "resolved", "rejected"],
+  investigating: ["resolved", "rejected"],
+  resolved: [],
+  rejected: [],
 };
 
-const TERMINAL_STATUSES: DisputeStatus[] = ['resolved', 'rejected'];
+const TERMINAL_STATUSES: DisputeStatus[] = ["resolved", "rejected"];
 
 // ---------------------------------------------------------------------------
 // Notification helper
@@ -62,7 +62,7 @@ interface NotificationPayload {
 
 function sendNotification(payload: NotificationPayload): void {
   // TODO: replace with real delivery (email, SMS, webhook, etc.)
-  console.log('[DisputeNotification]', JSON.stringify(payload));
+  console.log("[DisputeNotification]", JSON.stringify(payload));
 }
 
 // ---------------------------------------------------------------------------
@@ -87,29 +87,34 @@ export class DisputeService {
   async openDispute(
     transactionId: string,
     reason: string,
-    reportedBy?: string
+    reportedBy?: string,
   ): Promise<Dispute> {
     const transaction = await this.transactionModel.findById(transactionId);
     if (!transaction) {
       throw new Error(`Transaction ${transactionId} not found`);
     }
 
-    const existing = await this.disputeModel.findActiveByTransactionId(transactionId);
+    const existing =
+      await this.disputeModel.findActiveByTransactionId(transactionId);
     if (existing) {
       throw new Error(
-        `An active dispute (${existing.id}) already exists for transaction ${transactionId}`
+        `An active dispute (${existing.id}) already exists for transaction ${transactionId}`,
       );
     }
 
-    const dispute = await this.disputeModel.create({ transactionId, reason, reportedBy });
+    const dispute = await this.disputeModel.create({
+      transactionId,
+      reason,
+      reportedBy,
+    });
 
     sendNotification({
-      event:         'dispute.opened',
-      disputeId:     dispute.id,
+      event: "dispute.opened",
+      disputeId: dispute.id,
       transactionId: dispute.transactionId,
-      status:        dispute.status,
-      message:       `Dispute opened for transaction ${transactionId}`,
-      metadata:      { reason, reportedBy },
+      status: dispute.status,
+      message: `Dispute opened for transaction ${transactionId}`,
+      metadata: { reason, reportedBy },
     });
 
     return dispute;
@@ -138,7 +143,7 @@ export class DisputeService {
     disputeId: string,
     newStatus: DisputeStatus,
     resolution?: string,
-    assignedTo?: string
+    assignedTo?: string,
   ): Promise<Dispute> {
     const dispute = await this.disputeModel.findById(disputeId);
     if (!dispute) {
@@ -150,13 +155,15 @@ export class DisputeService {
       throw new Error(
         `Cannot transition dispute from "${dispute.status}" to "${newStatus}". ` +
           (allowed.length
-            ? `Allowed transitions: ${allowed.join(', ')}`
-            : `"${dispute.status}" is a terminal state.`)
+            ? `Allowed transitions: ${allowed.join(", ")}`
+            : `"${dispute.status}" is a terminal state.`),
       );
     }
 
     if (TERMINAL_STATUSES.includes(newStatus) && !resolution) {
-      throw new Error(`A resolution text is required when setting status to "${newStatus}"`);
+      throw new Error(
+        `A resolution text is required when setting status to "${newStatus}"`,
+      );
     }
 
     const updated = await this.disputeModel.update(disputeId, {
@@ -166,12 +173,12 @@ export class DisputeService {
     });
 
     sendNotification({
-      event:         `dispute.${newStatus}`,
-      disputeId:     updated.id,
+      event: `dispute.${newStatus}`,
+      disputeId: updated.id,
       transactionId: updated.transactionId,
-      status:        updated.status,
-      message:       `Dispute ${disputeId} status changed to "${newStatus}"`,
-      metadata:      { previousStatus: dispute.status, resolution, assignedTo },
+      status: updated.status,
+      message: `Dispute ${disputeId} status changed to "${newStatus}"`,
+      metadata: { previousStatus: dispute.status, resolution, assignedTo },
     });
 
     return updated;
@@ -198,20 +205,20 @@ export class DisputeService {
     let updated = await this.disputeModel.assign(disputeId, agentName);
 
     // Auto-advance open → investigating on first assignment
-    if (updated.status === 'open') {
+    if (updated.status === "open") {
       updated = await this.disputeModel.update(disputeId, {
-        status:     'investigating',
+        status: "investigating",
         assignedTo: agentName,
       });
     }
 
     sendNotification({
-      event:         'dispute.assigned',
-      disputeId:     updated.id,
+      event: "dispute.assigned",
+      disputeId: updated.id,
       transactionId: updated.transactionId,
-      status:        updated.status,
-      message:       `Dispute ${disputeId} assigned to ${agentName}`,
-      metadata:      { agentName },
+      status: updated.status,
+      message: `Dispute ${disputeId} assigned to ${agentName}`,
+      metadata: { agentName },
     });
 
     return updated;
@@ -227,7 +234,7 @@ export class DisputeService {
   async addNote(
     disputeId: string,
     author: string,
-    note: string
+    note: string,
   ): Promise<DisputeNote> {
     const dispute = await this.disputeModel.findById(disputeId);
     if (!dispute) {
@@ -249,11 +256,23 @@ export class DisputeService {
     generatedAt: string;
     filter: ReportFilter;
     summary: DisputeReportRow[];
-    totals: { total: number; open: number; investigating: number; resolved: number; rejected: number };
+    totals: {
+      total: number;
+      open: number;
+      investigating: number;
+      resolved: number;
+      rejected: number;
+    };
   }> {
     const rows = await this.disputeModel.generateReport(filter);
 
-    const totals = { total: 0, open: 0, investigating: 0, resolved: 0, rejected: 0 };
+    const totals = {
+      total: 0,
+      open: 0,
+      investigating: 0,
+      resolved: 0,
+      rejected: 0,
+    };
     for (const row of rows) {
       const count = parseInt(row.count, 10);
       totals.total += count;

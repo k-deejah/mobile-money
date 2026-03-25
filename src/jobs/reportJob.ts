@@ -1,4 +1,4 @@
-import { pool } from '../config/database';
+import { pool } from "../config/database";
 
 /**
  * Report Generation Job
@@ -21,7 +21,7 @@ export async function runReportJob(): Promise<void> {
 
   const date = new Date();
   date.setDate(date.getDate() - 1);
-  const reportDate = date.toISOString().split('T')[0];
+  const reportDate = date.toISOString().split("T")[0];
 
   if (result.rows.length === 0) {
     console.log(`[report] ${reportDate}: No transactions found`);
@@ -31,7 +31,7 @@ export async function runReportJob(): Promise<void> {
   console.log(`[report] Daily report for ${reportDate}:`);
   for (const row of result.rows) {
     console.log(
-      `[report]   ${row.type} | ${row.status}: ${row.count} transaction(s), total ${row.total_amount}`
+      `[report]   ${row.type} | ${row.status}: ${row.count} transaction(s), total ${row.total_amount}`,
     );
   }
 }

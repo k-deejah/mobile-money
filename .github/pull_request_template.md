@@ -1,10 +1,13 @@
 ## Description
+
 Brief description of changes.
 
 ## Related Issue
+
 Fixes #(issue number)
 
 ## Type of Change
+
 - [ ] Bug fix
 - [ ] New feature
 - [ ] Documentation update
@@ -12,14 +15,17 @@ Fixes #(issue number)
 - [ ] Performance improvement
 
 ## Changes Made
-- 
-- 
-- 
+
+-
+-
+-
 
 ## Testing
+
 How did you test these changes?
 
 ## Checklist
+
 - [ ] Code follows project style
 - [ ] Self-reviewed my code
 - [ ] Commented complex code

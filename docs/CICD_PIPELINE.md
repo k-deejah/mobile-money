@@ -26,6 +26,7 @@ The CI workflow (`.github/workflows/ci.yml`) executes the following jobs:
 **Purpose**: Execute automated tests with coverage reporting
 
 **Steps**:
+
 - Checkout code from repository
 - Setup Node.js 20 with npm caching
 - Install dependencies using `npm ci`
@@ -34,10 +35,12 @@ The CI workflow (`.github/workflows/ci.yml`) executes the following jobs:
 - Upload coverage report to Codecov
 
 **Services**:
+
 - PostgreSQL 16 (test database on port 5432)
 - Redis 7 (test cache on port 6379)
 
 **Environment Variables**:
+
 - `DATABASE_URL`: postgresql://test_user:test_password@localhost:5432/test_db
 - `REDIS_URL`: redis://localhost:6379
 - `NODE_ENV`: test
@@ -49,6 +52,7 @@ The CI workflow (`.github/workflows/ci.yml`) executes the following jobs:
 **Purpose**: Compile TypeScript code and verify build artifacts
 
 **Steps**:
+
 - Checkout code from repository
 - Setup Node.js 20 with npm caching
 - Install dependencies using `npm ci`
@@ -64,6 +68,7 @@ The CI workflow (`.github/workflows/ci.yml`) executes the following jobs:
 **Purpose**: Build Docker images and push to container registry
 
 **Steps**:
+
 - Checkout code from repository
 - Setup Docker Buildx for advanced build features
 - Authenticate with container registry
@@ -76,6 +81,7 @@ The CI workflow (`.github/workflows/ci.yml`) executes the following jobs:
 **Dependencies**: Requires successful completion of both test and build jobs
 
 **Image Tags**:
+
 - `{repository}:{commit-sha}` - Always applied (e.g., `sublime247/mobile-money:a1b2c3d`)
 - `{repository}:{branch-name}` - Always applied (e.g., `sublime247/mobile-money:main`)
 - `{repository}:latest` - Only applied on main branch
@@ -91,6 +97,7 @@ The CD workflow (`.github/workflows/deploy.yml`) executes staging deployment:
 **Purpose**: Deploy validated Docker images to staging environment
 
 **Trigger Conditions**:
+
 - Only runs when CI workflow completes successfully
 - Only runs on main branch
 - Triggered automatically via `workflow_run` event
@@ -98,12 +105,15 @@ The CD workflow (`.github/workflows/deploy.yml`) executes staging deployment:
 **Steps**:
 
 #### Step 1: Checkout Code
+
 Retrieves repository code for deployment scripts and configuration files.
 
 #### Step 2: Container Registry Authentication
+
 Authenticates with the container registry using credentials stored in GitHub secrets.
 
 #### Step 3: Pull Docker Image
+
 Pulls the Docker image tagged with the commit SHA from the triggering CI workflow.
 
 ```bash
@@ -111,7 +121,9 @@ docker pull {repository}:{commit-sha}
 ```
 
 #### Step 4: Validate Environment Variables
+
 Checks that all required environment variables are present before deployment:
+
 - DATABASE_URL
 - REDIS_URL
 - STELLAR_NETWORK
@@ -121,13 +133,17 @@ Checks that all required environment variables are present before deployment:
 If any variables are missing, the deployment fails with a descriptive error message.
 
 #### Step 5: Deploy to Staging
+
 Deploys the application using Docker Compose:
+
 - Stops existing containers if running
 - Sets IMAGE_TAG environment variable to commit SHA
 - Starts containers using `docker-compose.yml`
 
 #### Step 6: Health Check Verification
+
 Performs health checks to verify successful deployment:
+
 - Polls the staging health endpoint (`/health/lb`)
 - Checks every 10 seconds for up to 5 minutes
 - Expects HTTP 200 response
@@ -135,7 +151,9 @@ Performs health checks to verify successful deployment:
 - Shows container logs on failure
 
 #### Step 7: Notify Deployment Failure (on failure only)
+
 If deployment fails, collects diagnostic information:
+
 - Displays commit SHA and author
 - Shows workflow run URL
 - Lists container status
@@ -191,30 +209,30 @@ The following secrets must be configured in your repository settings:
 
 ### CI Workflow Secrets
 
-| Secret Name | Description | Example |
-|------------|-------------|---------|
-| `CODECOV_TOKEN` | Codecov upload token for coverage reporting | `a1b2c3d4-e5f6-7890-abcd-ef1234567890` |
-| `REGISTRY_USERNAME` | Container registry username | `myusername` |
-| `REGISTRY_PASSWORD` | Container registry password/token | `ghp_abc123...` |
+| Secret Name         | Description                                 | Example                                |
+| ------------------- | ------------------------------------------- | -------------------------------------- |
+| `CODECOV_TOKEN`     | Codecov upload token for coverage reporting | `a1b2c3d4-e5f6-7890-abcd-ef1234567890` |
+| `REGISTRY_USERNAME` | Container registry username                 | `myusername`                           |
+| `REGISTRY_PASSWORD` | Container registry password/token           | `ghp_abc123...`                        |
 
 ### CD Workflow Secrets
 
-| Secret Name | Description | Example |
-|------------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL connection string for staging | `postgresql://user:pass@host:5432/db` |
-| `REDIS_URL` | Redis connection string for staging | `redis://host:6379` |
-| `STELLAR_NETWORK` | Stellar network (TESTNET or PUBLIC) | `TESTNET` |
-| `STELLAR_HORIZON_URL` | Stellar Horizon API endpoint | `https://horizon-testnet.stellar.org` |
-| `STELLAR_ISSUER_SECRET` | Stellar issuer account secret key | `SXXX...` |
-| `MTN_API_KEY` | MTN Mobile Money API key | `xxx-xxx-xxx` |
-| `MTN_API_SECRET` | MTN Mobile Money API secret | `xxx` |
-| `MTN_SUBSCRIPTION_KEY` | MTN subscription key | `xxx` |
-| `AIRTEL_API_KEY` | Airtel Money API key | `xxx` |
-| `AIRTEL_API_SECRET` | Airtel Money API secret | `xxx` |
-| `ORANGE_API_KEY` | Orange Money API key | `xxx` |
-| `ORANGE_API_SECRET` | Orange Money API secret | `xxx` |
-| `REQUEST_TIMEOUT_MS` | Request timeout in milliseconds | `30000` |
-| `STAGING_URL` | Staging environment base URL | `https://staging.example.com` |
+| Secret Name             | Description                              | Example                               |
+| ----------------------- | ---------------------------------------- | ------------------------------------- |
+| `DATABASE_URL`          | PostgreSQL connection string for staging | `postgresql://user:pass@host:5432/db` |
+| `REDIS_URL`             | Redis connection string for staging      | `redis://host:6379`                   |
+| `STELLAR_NETWORK`       | Stellar network (TESTNET or PUBLIC)      | `TESTNET`                             |
+| `STELLAR_HORIZON_URL`   | Stellar Horizon API endpoint             | `https://horizon-testnet.stellar.org` |
+| `STELLAR_ISSUER_SECRET` | Stellar issuer account secret key        | `SXXX...`                             |
+| `MTN_API_KEY`           | MTN Mobile Money API key                 | `xxx-xxx-xxx`                         |
+| `MTN_API_SECRET`        | MTN Mobile Money API secret              | `xxx`                                 |
+| `MTN_SUBSCRIPTION_KEY`  | MTN subscription key                     | `xxx`                                 |
+| `AIRTEL_API_KEY`        | Airtel Money API key                     | `xxx`                                 |
+| `AIRTEL_API_SECRET`     | Airtel Money API secret                  | `xxx`                                 |
+| `ORANGE_API_KEY`        | Orange Money API key                     | `xxx`                                 |
+| `ORANGE_API_SECRET`     | Orange Money API secret                  | `xxx`                                 |
+| `REQUEST_TIMEOUT_MS`    | Request timeout in milliseconds          | `30000`                               |
+| `STAGING_URL`           | Staging environment base URL             | `https://staging.example.com`         |
 
 ## Required Environment Variables
 
@@ -249,12 +267,14 @@ These are loaded from GitHub secrets and passed to the deployment:
 **Symptom**: CI workflow fails at "Run tests with coverage" step
 
 **Possible Causes**:
+
 - Code changes broke existing tests
 - Database connection issues
 - Redis connection issues
 - Missing environment variables
 
 **Solutions**:
+
 ```bash
 # Run tests locally to reproduce
 npm run test:coverage
@@ -271,10 +291,12 @@ redis-cli -h localhost -p 6379 ping
 **Symptom**: CI workflow fails at "Run linter" step
 
 **Possible Causes**:
+
 - Code style violations
 - ESLint configuration issues
 
 **Solutions**:
+
 ```bash
 # Run linter locally
 npm run lint
@@ -288,11 +310,13 @@ npm run lint -- --fix
 **Symptom**: CI workflow fails at "Build" step
 
 **Possible Causes**:
+
 - TypeScript compilation errors
 - Missing dependencies
 - Type errors
 
 **Solutions**:
+
 ```bash
 # Run build locally
 npm run build
@@ -306,11 +330,13 @@ npx tsc --noEmit
 **Symptom**: CI workflow fails at "Build and push Docker image" step
 
 **Possible Causes**:
+
 - Invalid Dockerfile syntax
 - Missing files referenced in Dockerfile
 - Base image not accessible
 
 **Solutions**:
+
 ```bash
 # Build Docker image locally
 docker build -t test-image .
@@ -327,14 +353,17 @@ docker pull node:20-alpine
 **Symptom**: "Log in to Container Registry" step fails
 
 **Possible Causes**:
+
 - Invalid credentials
 - Expired access token
 - Incorrect secret names
 
 **Solutions**:
+
 1. Verify secrets are set correctly in repository settings
 2. Regenerate access token if expired
 3. Test credentials locally:
+
 ```bash
 echo $REGISTRY_PASSWORD | docker login -u $REGISTRY_USERNAME --password-stdin
 ```
@@ -344,11 +373,13 @@ echo $REGISTRY_PASSWORD | docker login -u $REGISTRY_USERNAME --password-stdin
 **Symptom**: Docker push succeeds but verification fails
 
 **Possible Causes**:
+
 - Network issues
 - Registry rate limiting
 - Insufficient permissions
 
 **Solutions**:
+
 1. Check registry status page
 2. Verify account has push permissions
 3. Wait and retry (rate limiting)
@@ -358,12 +389,14 @@ echo $REGISTRY_PASSWORD | docker login -u $REGISTRY_USERNAME --password-stdin
 **Symptom**: CD workflow fails at "Deploy to staging" step
 
 **Possible Causes**:
+
 - Missing environment variables
 - Docker Compose configuration issues
 - Port conflicts
 - Insufficient resources
 
 **Solutions**:
+
 ```bash
 # Check environment variables
 echo $DATABASE_URL
@@ -383,28 +416,34 @@ netstat -tuln | grep 6379
 **Symptom**: Deployment succeeds but health checks timeout
 
 **Possible Causes**:
+
 - Application startup issues
 - Database connection failures
 - Missing environment variables
 - Application crashes
 
 **Solutions**:
+
 1. Check container logs:
+
 ```bash
 docker compose -f docker-compose.yml logs
 ```
 
 2. Verify application is running:
+
 ```bash
 docker compose -f docker-compose.yml ps
 ```
 
 3. Test health endpoint manually:
+
 ```bash
 curl http://localhost:3000/health/lb
 ```
 
 4. Check database connectivity:
+
 ```bash
 docker compose exec app node -e "require('./dist/config/database').testConnection()"
 ```
@@ -427,6 +466,7 @@ docker compose exec app node -e "require('./dist/config/database').testConnectio
 #### Enable Debug Logging
 
 Add these secrets to enable verbose logging:
+
 - `ACTIONS_STEP_DEBUG`: `true`
 - `ACTIONS_RUNNER_DEBUG`: `true`
 
@@ -508,17 +548,20 @@ To manually trigger a deployment:
 If a deployment causes issues:
 
 1. **Identify last working commit**:
+
 ```bash
 git log --oneline
 ```
 
 2. **Revert to previous commit**:
+
 ```bash
 git revert <bad-commit-sha>
 git push origin main
 ```
 
 3. **Or manually deploy previous image**:
+
 ```bash
 # Pull previous working image
 docker pull {repository}:{previous-commit-sha}
@@ -541,6 +584,7 @@ The README.md displays two status badges:
 ```
 
 Shows the current status of the CI workflow:
+
 - Green "passing" - All checks passed
 - Red "failing" - One or more checks failed
 
@@ -559,6 +603,7 @@ Both badges link to their respective services for detailed information.
 ### For Developers
 
 1. **Run tests locally before pushing**
+
    ```bash
    npm run test:coverage
    npm run lint
@@ -605,6 +650,7 @@ Both badges link to their respective services for detailed information.
 ## Support
 
 For pipeline issues or questions:
+
 1. Check this documentation first
 2. Review workflow logs in Actions tab
 3. Search existing GitHub issues

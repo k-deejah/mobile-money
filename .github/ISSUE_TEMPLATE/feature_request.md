@@ -1,19 +1,23 @@
 ---
 name: Feature Request
 about: Suggest a new feature
-title: '[FEATURE] '
+title: "[FEATURE] "
 labels: enhancement
-assignees: ''
+assignees: ""
 ---
 
 ## Problem
+
 Describe the problem this feature would solve.
 
 ## Proposed Solution
+
 How would you like this to work?
 
 ## Alternatives Considered
+
 Other approaches you've thought about.
 
 ## Additional Context
+
 Any other relevant information.

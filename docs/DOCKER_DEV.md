@@ -26,11 +26,11 @@ docker compose up
 
 This starts three containers:
 
-| Container | Service | Port |
-|-----------|---------|------|
-| `mobilemoney_postgres` | PostgreSQL 16 | `5432` |
-| `mobilemoney_redis` | Redis 7 | `6379` |
-| `mobilemoney_app` | Node/Express (live reload) | `3000` |
+| Container              | Service                    | Port   |
+| ---------------------- | -------------------------- | ------ |
+| `mobilemoney_postgres` | PostgreSQL 16              | `5432` |
+| `mobilemoney_redis`    | Redis 7                    | `6379` |
+| `mobilemoney_app`      | Node/Express (live reload) | `3000` |
 
 The app waits for Postgres and Redis to pass their healthchecks before starting, so there are no race-condition connection errors on a cold boot.
 
