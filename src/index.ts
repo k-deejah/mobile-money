@@ -33,12 +33,11 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Rate limiter configuration
-const RATE_LIMIT_WINDOW_MS = parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'); // 15 minutes
-const RATE_LIMIT_MAX_REQUESTS = parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100');
+const RATE_LIMIT_WINDOW_MS     = parseInt(process.env.RATE_LIMIT_WINDOW_MS     ?? '900000', 10);
+const RATE_LIMIT_MAX_REQUESTS  = parseInt(process.env.RATE_LIMIT_MAX_REQUESTS  ?? '100',    10);
 
 const limiter = rateLimit({
-  windowMs: RATE_LIMIT_WINDOW_MS,
+  windowMs: RATE_LIMIT_WINDOW_MS, // 15 minutes
   max: RATE_LIMIT_MAX_REQUESTS,
   standardHeaders: true,
   legacyHeaders: false,
@@ -70,6 +69,7 @@ app.get("/health", (req, res) => {
 /**
  * Readiness probe (DB + Redis)
  */
+
 app.get("/ready", async (req, res) => {
   const checks: Record<string, string> = {
     database: "down",
