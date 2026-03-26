@@ -8,12 +8,13 @@ export interface AuthRequest extends Request {
   };
 }
 
-// Extend Request interface to include JWT user information
-declare global {
-  namespace Express {
-    interface Request {
-      jwtUser?: JWTPayload;
-    }
+declare module "express-serve-static-core" {
+  interface Request {
+    jwtUser?: JWTPayload;
+    user?: {
+      id: string;
+      role: string;
+    };
   }
 }
 

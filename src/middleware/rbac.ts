@@ -1,13 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import { pool } from '../config/database';
 
-// Extend Request interface to include user role information
-declare global {
-  namespace Express {
-    interface Request {
-      userRole?: string;
-      userPermissions?: string[];
-    }
+declare module "express-serve-static-core" {
+  interface Request {
+    userRole?: string;
+    userPermissions?: string[];
   }
 }
 

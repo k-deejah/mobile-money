@@ -5,6 +5,8 @@ export interface User {
   phoneNumber: string;
   kycLevel: string;
   email?: string;
+  two_factor_secret?: string | null;
+  backup_codes?: string[] | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -20,6 +22,8 @@ export class UserModel {
       phoneNumber: row.phone_number,
       kycLevel: row.kyc_level,
       email: row.email,
+      two_factor_secret: row.two_factor_secret ?? null,
+      backup_codes: row.backup_codes ?? null,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };

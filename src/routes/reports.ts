@@ -3,6 +3,7 @@ import { pool } from "../config/database";
 import { redisClient } from "../config/redis";
 import { requireAuth, AuthRequest } from "../middleware/auth";
 import { TimeoutPresets, haltOnTimedout } from "../middleware/timeout";
+import { amlService } from "../services/aml";
 
 export const reportsRoutes = Router();
 
@@ -305,4 +306,55 @@ reportsRoutes.get(
       });
     }
   }
+);
+
+// GET /api/reports/aml
+reportsRoutes.get(
+  "/aml",
+  TimeoutPresets.quick,
+  haltOnTimedout,
+  requireAuth,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const startDateRaw =
+        typeof req.query.startDate === "string"
+          ? req.query.startDate
+          : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+              .toISOString()
+              .slice(0, 10);
+      const endDateRaw =
+        typeof req.query.endDate === "string"
+          ? req.query.endDate
+          : new Date().toISOString().slice(0, 10);
+
+      const startDate = new Date(startDateRaw);
+      const endDate = new Date(endDateRaw);
+
+      if (
+        Number.isNaN(startDate.getTime()) ||
+        Number.isNaN(endDate.getTime())
+      ) {
+        return res.status(400).json({
+          error: "Bad Request",
+          message: "Invalid date format. Use YYYY-MM-DD format",
+        });
+      }
+
+      if (startDate > endDate) {
+        return res.status(400).json({
+          error: "Bad Request",
+          message: "startDate must be before or equal to endDate",
+        });
+      }
+
+      const report = amlService.generateReport(startDate, endDate);
+      return res.json(report);
+    } catch (error) {
+      console.error("Error generating AML report:", error);
+      return res.status(500).json({
+        error: "Internal Server Error",
+        message: "Failed to generate AML report",
+      });
+    }
+  },
 );

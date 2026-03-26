@@ -3,8 +3,15 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = '1h';
+
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET is not defined in environment variables');
+  }
+  return secret;
+}
 
 export interface JWTPayload {
   userId: string;
@@ -19,11 +26,9 @@ export interface JWTPayload {
  * @returns Signed JWT token
  */
 export function generateToken(payload: Omit<JWTPayload, 'iat' | 'exp'>): string {
-  if (!JWT_SECRET) {
-    throw new Error('JWT_SECRET is not defined in environment variables');
-  }
+  const secret = getJwtSecret();
 
-  return jwt.sign(payload, JWT_SECRET, {
+  return jwt.sign(payload, secret, {
     expiresIn: JWT_EXPIRES_IN,
   });
 }
@@ -35,12 +40,10 @@ export function generateToken(payload: Omit<JWTPayload, 'iat' | 'exp'>): string 
  * @throws Error if token is invalid or expired
  */
 export function verifyToken(token: string): JWTPayload {
-  if (!JWT_SECRET) {
-    throw new Error('JWT_SECRET is not defined in environment variables');
-  }
+  const secret = getJwtSecret();
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as JWTPayload;
+    const decoded = jwt.verify(token, secret) as JWTPayload;
     return decoded;
   } catch (error) {
     if (error instanceof jwt.TokenExpiredError) {

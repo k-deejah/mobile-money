@@ -6,14 +6,14 @@ import { Request, Response, NextFunction } from "express";
  */
 
 export interface VersionedRequest extends Request {
-  apiVersion: string;
+  apiVersion?: string;
   requestedVersion?: string;
 }
 
 // Current API version
 export const CURRENT_VERSION = "v1";
 export const SUPPORTED_VERSIONS = ["v1"];
-export const DEPRECATED_VERSIONS = [];
+export const DEPRECATED_VERSIONS: string[] = [];
 
 /**
  * Middleware: Extract API version from URL or Accept header
@@ -70,7 +70,7 @@ export const validateVersionMiddleware = (
   res: Response,
   next: NextFunction
 ) => {
-  const { apiVersion } = req;
+  const apiVersion = req.apiVersion ?? CURRENT_VERSION;
 
   if (!SUPPORTED_VERSIONS.includes(apiVersion)) {
     return res.status(400).json({

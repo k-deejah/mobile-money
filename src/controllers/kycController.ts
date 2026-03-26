@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { Pool } from 'pg';
-import KYCService, { KYCLevel, KYCStatus } from '../services/kyc';
+import KYCService, { DocumentType, KYCLevel, KYCStatus } from '../services/kyc';
 import { z } from 'zod';
 
 // Validation schemas
@@ -28,7 +28,7 @@ const CreateApplicantSchema = z.object({
 
 const UploadDocumentSchema = z.object({
   applicant_id: z.string(),
-  type: z.enum(['passport', 'driving_license', 'national_identity_card', 'residence_permit']),
+  type: z.nativeEnum(DocumentType),
   side: z.enum(['front', 'back']).optional(),
   filename: z.string().min(1, 'Filename is required'),
   data: z.string().min(1, 'Document data is required'),
@@ -84,7 +84,7 @@ export class KYCController {
       if (error instanceof z.ZodError) {
         return res.status(400).json({
           error: 'Validation error',
-          details: error.errors,
+          details: error.issues,
         });
       }
       
@@ -163,7 +163,7 @@ export class KYCController {
       if (error instanceof z.ZodError) {
         return res.status(400).json({
           error: 'Validation error',
-          details: error.errors,
+          details: error.issues,
         });
       }
       
@@ -212,7 +212,7 @@ export class KYCController {
       if (error instanceof z.ZodError) {
         return res.status(400).json({
           error: 'Validation error',
-          details: error.errors,
+          details: error.issues,
         });
       }
       
@@ -260,7 +260,7 @@ export class KYCController {
       if (error instanceof z.ZodError) {
         return res.status(400).json({
           error: 'Validation error',
-          details: error.errors,
+          details: error.issues,
         });
       }
       

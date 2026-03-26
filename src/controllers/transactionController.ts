@@ -1,6 +1,5 @@
 import { NextFunction, Request, Response } from "express";
 import { z } from "zod";
-import { pool } from "../config/database";
 import { StellarService } from "../services/stellar/stellarService";
 import { MobileMoneyService } from "../services/mobilemoney/mobileMoneyService";
 import { Transaction, TransactionModel, TransactionStatus } from "../models/transaction";
@@ -8,8 +7,9 @@ import { lockManager, LockKeys } from "../utils/lock";
 import { TransactionLimitService } from "../services/transactionLimit/transactionLimitService";
 import { KYCService } from "../services/kyc/kycService";
 import { MobileMoneyProvider, validateProviderLimits } from "../config/providers";
-import {
 import type { TransactionJobData } from "../queue/transactionQueue";
+import { amlService } from "../services/aml";
+import {
   CancelTransactionResponse,
   LimitExceededErrorResponse,
   PhoneSearchResponse,
@@ -20,6 +20,7 @@ import type { TransactionJobData } from "../queue/transactionQueue";
 const IDEMPOTENCY_TTL_HOURS = Number(
   process.env.IDEMPOTENCY_KEY_TTL_HOURS || 24,
 );
+const timeoutMinutes = Number(process.env.TRANSACTION_TIMEOUT_MINUTES || 30);
 
 type TransactionRequestType = "deposit" | "withdraw";
 type CreateTransactionResponse = TransactionResponse;
@@ -190,6 +191,58 @@ function buildTransactionResponse(
   };
 }
 
+async function monitorTransactionForAML(transaction: Transaction): Promise<void> {
+  if (!transaction.userId) return;
+
+  const amount = Number(transaction.amount);
+  if (!Number.isFinite(amount) || amount < 0) return;
+
+  try {
+    const result = await amlService.monitorTransaction({
+      id: transaction.id,
+      userId: transaction.userId,
+      type: transaction.type,
+      amount,
+      createdAt:
+        transaction.createdAt instanceof Date
+          ? transaction.createdAt
+          : new Date(transaction.createdAt),
+      status: transaction.status,
+    });
+
+    if (!result.flagged || !result.alert) {
+      return;
+    }
+
+    const amlMetadata = {
+      aml: {
+        alertId: result.alert.id,
+        status: result.alert.status,
+        severity: result.alert.severity,
+        reasons: result.alert.reasons,
+        flaggedAt: result.alert.createdAt,
+      },
+    };
+
+    await Promise.all([
+      transactionModel.addTags(transaction.id, ["aml-flagged", "aml-review"]),
+      transactionModel.patchMetadata(transaction.id, amlMetadata),
+      transactionModel.updateAdminNotes(
+        transaction.id,
+        `[AML:${result.alert.id}] ${result.alert.reasons.join(" | ")}`.slice(
+          0,
+          1000,
+        ),
+      ),
+    ]);
+  } catch (error) {
+    console.error(
+      `AML monitoring failed for transaction ${transaction.id}:`,
+      error,
+    );
+  }
+}
+
 function isUniqueViolation(error: unknown): boolean {
   if (!error || typeof error !== "object") {
     return false;
@@ -286,6 +339,7 @@ async function processTransactionRequest(
                 ? buildIdempotencyExpiry()
                 : null,
             });
+            void monitorTransactionForAML(transaction);
 
             const job = await addTransactionJob(
               {
@@ -608,6 +662,88 @@ export const listTransactionsHandler = async (req: Request, res: Response) => {
   } catch (err) {
     console.error("Failed to list transactions:", err);
     return res.status(500).json({ error: "Failed to list transactions" });
+  }
+};
+
+export const listAmlAlertsHandler = async (req: Request, res: Response) => {
+  try {
+    const { status, userId, startDate, endDate } = req.query;
+    const validStatuses = ["pending_review", "reviewed", "dismissed"] as const;
+    const statusFilter =
+      typeof status === "string" &&
+      validStatuses.includes(status as (typeof validStatuses)[number])
+        ? status
+        : undefined;
+
+    const parsedStart =
+      typeof startDate === "string" ? new Date(startDate) : undefined;
+    const parsedEnd =
+      typeof endDate === "string" ? new Date(endDate) : undefined;
+
+    if (
+      (parsedStart && Number.isNaN(parsedStart.getTime())) ||
+      (parsedEnd && Number.isNaN(parsedEnd.getTime()))
+    ) {
+      return res
+        .status(400)
+        .json({ error: "Invalid date format for startDate/endDate" });
+    }
+
+    const alerts = amlService.getAlerts({
+      status: statusFilter as "pending_review" | "reviewed" | "dismissed" | undefined,
+      userId: typeof userId === "string" ? userId : undefined,
+      startDate: parsedStart,
+      endDate: parsedEnd,
+    });
+
+    return res.json({
+      data: alerts,
+      total: alerts.length,
+      pendingReview: alerts.filter((a) => a.status === "pending_review").length,
+    });
+  } catch (error) {
+    console.error("Failed to list AML alerts:", error);
+    return res.status(500).json({ error: "Failed to list AML alerts" });
+  }
+};
+
+export const reviewAmlAlertHandler = async (req: Request, res: Response) => {
+  try {
+    const { alertId } = req.params;
+    const { status, reviewedBy, reviewNotes } = req.body as {
+      status?: "reviewed" | "dismissed";
+      reviewedBy?: string;
+      reviewNotes?: string;
+    };
+
+    if (!status || !["reviewed", "dismissed"].includes(status)) {
+      return res
+        .status(400)
+        .json({ error: "status must be one of: reviewed, dismissed" });
+    }
+
+    if (!reviewedBy || typeof reviewedBy !== "string") {
+      return res.status(400).json({ error: "reviewedBy is required" });
+    }
+
+    if (reviewNotes !== undefined && typeof reviewNotes !== "string") {
+      return res.status(400).json({ error: "reviewNotes must be a string" });
+    }
+
+    const updated = amlService.reviewAlert(alertId, {
+      status,
+      reviewedBy,
+      reviewNotes,
+    });
+
+    if (!updated) {
+      return res.status(404).json({ error: "AML alert not found" });
+    }
+
+    return res.json(updated);
+  } catch (error) {
+    console.error("Failed to review AML alert:", error);
+    return res.status(500).json({ error: "Failed to review AML alert" });
   }
 };
 

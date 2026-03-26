@@ -1,12 +1,15 @@
 import { Request, Response, NextFunction } from 'express';
-import { verifyTOTPToken, verifyBackupCode, is2FAEnabled } from '../auth/2fa';
+import {
+  verifyTOTPToken,
+  verifyBackupCode,
+  is2FAEnabled,
+  BackupCode,
+} from '../auth/2fa';
 import { getUserById } from '../services/userService';
 
-declare global {
-  namespace Express {
-    interface Request {
-      twoFactorVerified?: boolean;
-    }
+declare module "express-serve-static-core" {
+  interface Request {
+    twoFactorVerified?: boolean;
   }
 }
 
@@ -58,8 +61,18 @@ export function requireTwoFactor(req: Request, res: Response, next: NextFunction
       const backupCode = req.body['backupCode'] || req.body['backup_code'];
       
       if (backupCode && user.backup_codes) {
+        const backupCodes: BackupCode[] = user.backup_codes.map((item, index) =>
+          typeof item === 'string'
+            ? {
+                id: String(index),
+                code_hash: item,
+                used: false,
+                created_at: new Date(0),
+              }
+            : item,
+        );
         // Verify backup code
-        const verification = await verifyBackupCode(backupCode, user.backup_codes);
+        const verification = await verifyBackupCode(backupCode, backupCodes);
         if (verification.valid) {
           req.twoFactorVerified = true;
           // Mark backup code as used (this would typically update the database)
@@ -147,7 +160,17 @@ export function optionalTwoFactor(req: Request, res: Response, next: NextFunctio
       const backupCode = req.body['backupCode'] || req.body['backup_code'];
       
       if (backupCode && user.backup_codes) {
-        const verification = await verifyBackupCode(backupCode, user.backup_codes);
+        const backupCodes: BackupCode[] = user.backup_codes.map((item, index) =>
+          typeof item === 'string'
+            ? {
+                id: String(index),
+                code_hash: item,
+                used: false,
+                created_at: new Date(0),
+              }
+            : item,
+        );
+        const verification = await verifyBackupCode(backupCode, backupCodes);
         if (verification.valid) {
           req.twoFactorVerified = true;
           return next();

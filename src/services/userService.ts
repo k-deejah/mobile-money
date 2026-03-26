@@ -6,6 +6,8 @@ export interface User {
   kyc_level: string;
   role_id?: string;
   role_name?: string;
+  two_factor_secret?: string | null;
+  backup_codes?: string[] | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -31,6 +33,8 @@ export async function getUserByPhoneNumber(phoneNumber: string): Promise<User | 
       u.phone_number,
       u.kyc_level,
       u.role_id,
+      u.two_factor_secret,
+      u.backup_codes,
       u.created_at,
       u.updated_at,
       r.name as role_name
@@ -53,6 +57,8 @@ export async function getUserById(userId: string): Promise<User | null> {
       u.phone_number,
       u.kyc_level,
       u.role_id,
+      u.two_factor_secret,
+      u.backup_codes,
       u.created_at,
       u.updated_at,
       r.name as role_name

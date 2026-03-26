@@ -10,12 +10,25 @@ import { MobileMoneyService } from "../services/mobilemoney/mobileMoneyService";
 import { StellarService } from "../services/stellar/stellarService";
 import { EmailService } from "../services/email";
 import { UserModel } from "../models/users";
+import { SmsService } from "../services/sms";
+import { withRetry } from "../services/retry";
+import { notifyTransactionWebhook, WebhookService } from "../services/webhook";
 
 const transactionModel = new TransactionModel();
 const mobileMoneyService = new MobileMoneyService();
 const stellarService = new StellarService();
 const emailService = new EmailService();
 const userModel = new UserModel();
+const smsService = new SmsService();
+const webhookService = new WebhookService();
+
+function getProviderFailureMessage(result: unknown, fallback: string): string | null {
+  if (!result || typeof result !== "object") return null;
+  if (!("success" in result) || result.success !== false) return null;
+
+  const maybeError = (result as { error?: unknown }).error;
+  return typeof maybeError === "string" ? maybeError : fallback;
+}
 
 const workerOptions = {
   ...queueOptions,
@@ -102,11 +115,12 @@ export const transactionWorker = new Worker<
             phoneNumber,
             amount,
           );
-          if (!mobileMoneyResult.success) {
-            throw new Error(
-              (mobileMoneyResult.error as string) ||
-                "Payment initiation failed",
-            );
+          const providerFailure = getProviderFailureMessage(
+            mobileMoneyResult,
+            "Payment initiation failed",
+          );
+          if (providerFailure) {
+            throw new Error(providerFailure);
           }
           return mobileMoneyResult;
         }, retryConfig);
@@ -161,10 +175,12 @@ export const transactionWorker = new Worker<
             phoneNumber,
             amount,
           );
-          if (!mobileMoneyResult.success) {
-            throw new Error(
-              (mobileMoneyResult.error as string) || "Payout failed",
-            );
+          const providerFailure = getProviderFailureMessage(
+            mobileMoneyResult,
+            "Payout failed",
+          );
+          if (providerFailure) {
+            throw new Error(providerFailure);
           }
           return mobileMoneyResult;
         }, retryConfig);
@@ -216,7 +232,13 @@ export const transactionWorker = new Worker<
       if (transaction?.userId) {
         const user = await userModel.findById(transaction.userId);
         if (user?.email) {
-          await emailService.sendTransactionFailure(user.email, transaction, error.message);
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          await emailService.sendTransactionFailure(
+            user.email,
+            transaction,
+            errorMessage,
+          );
         }
       }
       throw error;

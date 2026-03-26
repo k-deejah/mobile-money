@@ -242,6 +242,43 @@ ORANGE_MAX_AMOUNT=750000
 
 If not specified, the system uses the default values shown above.
 
+## AML Monitoring and Review
+
+The API now includes built-in Anti-Money Laundering (AML) monitoring for every
+new deposit and withdrawal request. Each new transaction is evaluated against
+configurable AML rules, and suspicious activity is flagged for compliance
+review.
+
+### Default AML Rules
+
+- Single transaction amount > `1,000,000 XAF`
+- Rolling 24-hour transaction total > `5,000,000 XAF`
+- Rapid deposit/withdraw structuring pattern (default: 3+ mixed in/out transactions within 15 minutes)
+
+### AML Configuration
+
+```bash
+AML_SINGLE_TRANSACTION_THRESHOLD_XAF=1000000
+AML_DAILY_TOTAL_THRESHOLD_XAF=5000000
+AML_ROLLING_WINDOW_HOURS=24
+AML_RAPID_WINDOW_MINUTES=15
+AML_RAPID_TRANSACTION_COUNT=3
+AML_STRUCTURING_FLOOR_XAF=100000
+```
+
+### Manual Review Workflow
+
+Flagged transactions are automatically tagged for review (`aml-flagged`,
+`aml-review`) and AML alert metadata is attached to the transaction.
+
+Compliance endpoints:
+
+- `GET /api/transactions/aml/alerts` - list AML alerts (filter by `status`, `userId`, `startDate`, `endDate`)
+- `PATCH /api/transactions/aml/alerts/:alertId/review` - mark alert as `reviewed` or `dismissed`
+- `GET /api/reports/aml` - AML summary report with status/rule breakdown
+
+All AML alerts are logged for audit visibility.
+
 ## Git Hooks
 
 This project uses [Husky](https://typicode.github.io/husky/) to enforce code quality via Git hooks.

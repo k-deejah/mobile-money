@@ -4,18 +4,19 @@ import {
   depositHandler,
   getTransactionHandler,
   getTransactionHistoryHandler,
+  listAmlAlertsHandler,
+  patchMetadataHandler,
+  reviewAmlAlertHandler,
   searchTransactionsHandler,
   updateNotesHandler,
-  withdrawHandler,
   updateMetadataHandler,
-  patchMetadataHandler,
   deleteMetadataKeysHandler,
   searchByMetadataHandler,
+  withdrawHandler,
 } from "../controllers/transactionController";
 import { validateTransaction } from "../middleware/validateTransaction";
 import { TimeoutPresets, haltOnTimedout } from "../middleware/timeout";
-import { authenticateToken } from "../middleware/auth";
-import { validateTransaction } from "../middleware/validateTransaction";
+import { requireAuth } from "../middleware/auth";
 
 export const transactionRoutes = Router();
 
@@ -33,9 +34,24 @@ transactionRoutes.get(
   searchTransactionsHandler,
 );
 
+transactionRoutes.get(
+  "/aml/alerts",
+  requireAuth,
+  TimeoutPresets.quick,
+  haltOnTimedout,
+  listAmlAlertsHandler,
+);
+
+transactionRoutes.patch(
+  "/aml/alerts/:alertId/review",
+  requireAuth,
+  TimeoutPresets.quick,
+  haltOnTimedout,
+  reviewAmlAlertHandler,
+);
+
 transactionRoutes.post(
   "/deposit",
-  authenticateToken,
   TimeoutPresets.long,
   haltOnTimedout,
   validateTransaction,
@@ -44,7 +60,6 @@ transactionRoutes.post(
 
 transactionRoutes.post(
   "/withdraw",
-  authenticateToken,
   TimeoutPresets.long,
   haltOnTimedout,
   validateTransaction,
@@ -53,7 +68,6 @@ transactionRoutes.post(
 
 transactionRoutes.get(
   "/:id",
-  authenticateToken,
   TimeoutPresets.quick,
   haltOnTimedout,
   getTransactionHandler
@@ -68,7 +82,6 @@ transactionRoutes.post(
 
 transactionRoutes.patch(
   "/:id/notes",
-  authenticateToken,
   TimeoutPresets.quick,
   haltOnTimedout,
   updateNotesHandler,

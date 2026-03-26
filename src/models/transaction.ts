@@ -75,7 +75,12 @@ export interface Transaction {
   status: TransactionStatus;
   tags: string[];
   notes?: string;
+  adminNotes?: string;
   admin_notes?: string;
+  userId?: string | null;
+  idempotencyKey?: string | null;
+  idempotencyExpiresAt?: Date | null;
+  retryCount?: number;
   webhook_delivery_status?: "pending" | "delivered" | "failed" | "skipped";
   webhook_last_attempt_at?: Date | null;
   webhook_delivered_at?: Date | null;
@@ -109,31 +114,89 @@ export interface WebhookDeliveryUpdate {
 
 /** Map a pg row (snake_case) to the Transaction interface */
 export function mapTransactionRow(
-  row: Record<string, unknown> | undefined | null,
+  row: Record<string, unknown> | Transaction | undefined | null,
 ): Transaction | null {
   if (!row) return null;
-  const created = row.created_at ?? row.createdAt;
+  const dbRow = row as Record<string, unknown>;
+  const created = dbRow.created_at ?? dbRow.createdAt;
+  const updated = dbRow.updated_at ?? dbRow.updatedAt;
+  const idempotencyExpires =
+    dbRow.idempotency_expires_at ?? dbRow.idempotencyExpiresAt;
+  const metadata = dbRow.metadata;
+
   return {
-    id: String(row.id),
-    referenceNumber: String(row.reference_number ?? row.referenceNumber ?? ""),
-    type: (row.type as Transaction["type"]) || "deposit",
-    amount: String(row.amount ?? ""),
-    phoneNumber: String(row.phone_number ?? row.phoneNumber ?? ""),
-    provider: String(row.provider ?? ""),
-    stellarAddress: String(row.stellar_address ?? row.stellarAddress ?? ""),
-    status: row.status as TransactionStatus,
-    tags: Array.isArray(row.tags) ? (row.tags as string[]) : [],
+    id: String(dbRow.id),
+    referenceNumber: String(dbRow.reference_number ?? dbRow.referenceNumber ?? ""),
+    type: (dbRow.type as Transaction["type"]) || "deposit",
+    amount: String(dbRow.amount ?? ""),
+    phoneNumber: String(dbRow.phone_number ?? dbRow.phoneNumber ?? ""),
+    provider: String(dbRow.provider ?? ""),
+    stellarAddress: String(dbRow.stellar_address ?? dbRow.stellarAddress ?? ""),
+    status: dbRow.status as TransactionStatus,
+    tags: Array.isArray(dbRow.tags) ? (dbRow.tags as string[]) : [],
     notes:
-      row.notes != null && row.notes !== ""
-        ? String(row.notes)
+      dbRow.notes != null && dbRow.notes !== ""
+        ? String(dbRow.notes)
         : undefined,
+    adminNotes:
+      dbRow.admin_notes != null && dbRow.admin_notes !== ""
+        ? String(dbRow.admin_notes)
+        : dbRow.adminNotes != null && dbRow.adminNotes !== ""
+          ? String(dbRow.adminNotes)
+          : undefined,
     admin_notes:
-      row.admin_notes != null && row.admin_notes !== ""
-        ? String(row.admin_notes)
+      dbRow.admin_notes != null && dbRow.admin_notes !== ""
+        ? String(dbRow.admin_notes)
         : undefined,
-    retryCount: Number(row.retry_count ?? 0),
+    userId:
+      dbRow.user_id != null
+        ? String(dbRow.user_id)
+        : dbRow.userId != null
+          ? String(dbRow.userId)
+          : null,
+    idempotencyKey:
+      dbRow.idempotency_key != null
+        ? String(dbRow.idempotency_key)
+        : dbRow.idempotencyKey != null
+          ? String(dbRow.idempotencyKey)
+          : null,
+    idempotencyExpiresAt:
+      idempotencyExpires instanceof Date
+        ? idempotencyExpires
+        : idempotencyExpires
+          ? new Date(String(idempotencyExpires))
+          : null,
+    retryCount: Number(dbRow.retry_count ?? dbRow.retryCount ?? 0),
+    webhook_delivery_status:
+      dbRow.webhook_delivery_status != null
+        ? (String(dbRow.webhook_delivery_status) as Transaction["webhook_delivery_status"])
+        : undefined,
+    webhook_last_attempt_at:
+      dbRow.webhook_last_attempt_at instanceof Date
+        ? dbRow.webhook_last_attempt_at
+        : dbRow.webhook_last_attempt_at
+          ? new Date(String(dbRow.webhook_last_attempt_at))
+          : null,
+    webhook_delivered_at:
+      dbRow.webhook_delivered_at instanceof Date
+        ? dbRow.webhook_delivered_at
+        : dbRow.webhook_delivered_at
+          ? new Date(String(dbRow.webhook_delivered_at))
+          : null,
+    webhook_last_error:
+      dbRow.webhook_last_error != null ? String(dbRow.webhook_last_error) : null,
+    metadata:
+      metadata && typeof metadata === "object" && !Array.isArray(metadata)
+        ? (metadata as Record<string, unknown>)
+        : {},
     createdAt:
       created instanceof Date ? created : new Date(String(created ?? "")),
+    updatedAt:
+      updated instanceof Date
+        ? updated
+        : updated
+          ? new Date(String(updated))
+          : null,
   };
 }
 
@@ -342,7 +405,7 @@ export class TransactionModel {
          AND status = 'completed'
          AND created_at >= $2
        ORDER BY created_at DESC`,
-      [userId, TransactionStatus.Completed, since],
+      [userId, since],
     );
     return result.rows
       .map((r) => mapTransactionRow(r))
@@ -351,7 +414,7 @@ export class TransactionModel {
 
   /** Increments retry_count after a failed transient attempt (before the next try). */
   async incrementRetryCount(id: string): Promise<number> {
-    const r = await pool.query(
+    const result = await pool.query<{ retry_count: number }>(
       `UPDATE transactions
        SET retry_count = retry_count + 1,
            updated_at = CURRENT_TIMESTAMP
@@ -360,7 +423,7 @@ export class TransactionModel {
       [id],
     );
 
-    return result.rows;
+    return result.rows[0]?.retry_count ?? 0;
   }
 
   async updateNotes(id: string, notes: string): Promise<Transaction | null> {
@@ -554,6 +617,19 @@ export class TransactionModel {
          AND idempotency_expires_at <= CURRENT_TIMESTAMP`,
       [idempotencyKey],
     );
+  }
+
+  async releaseAllExpiredIdempotencyKeys(): Promise<number> {
+    const result = await pool.query(
+      `UPDATE transactions
+       SET idempotency_key = NULL,
+           idempotency_expires_at = NULL,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE idempotency_expires_at IS NOT NULL
+         AND idempotency_expires_at <= CURRENT_TIMESTAMP`,
+    );
+
+    return result.rowCount ?? 0;
   }
 
   async findActiveByIdempotencyKey(

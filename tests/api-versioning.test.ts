@@ -5,7 +5,7 @@
 
 import request from "supertest";
 import express from "express";
-import { apiVersionMiddleware, validateVersionMiddleware, VersionedRequest } from "../../src/middleware/apiVersion";
+import { apiVersionMiddleware, validateVersionMiddleware, VersionedRequest } from "../src/middleware/apiVersion";
 
 describe("API Versioning", () => {
   let app: express.Application;
