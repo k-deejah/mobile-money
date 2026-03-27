@@ -7,6 +7,8 @@ import {
   TransactionBuilder,
   Memo,
   Timebounds,
+  Asset, // <--- Add this
+} from "stellar-sdk";
 } from "stellar-sdk";
 import { getStellarServer, getNetworkPassphrase, getFeeBumpConfig } from "../config/stellar";
 
