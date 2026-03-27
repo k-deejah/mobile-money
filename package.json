@@ -22,7 +22,9 @@
     "migrate:create": "tsx src/scripts/migrate.ts create",
     "migrate:status": "tsx src/scripts/migrate.ts status",
     "seed": "tsx src/scripts/seed.ts",
-    "postinstall": "npm run prepare"
+    "postinstall": "npm run prepare",
+    "contracts:build": "cd contracts/escrow && cargo build --target wasm32-unknown-unknown --release",
+    "contracts:test": "cd contracts/escrow && cargo test"
   },
   "lint-staged": {
     "*.{ts,tsx,js,cjs,mjs,json,md,yml,yaml}": "prettier --write"
