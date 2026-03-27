@@ -7,6 +7,7 @@ export const errorHandler = (
   res: Response,
   _next: NextFunction,
 ) => {
+  (res.locals as Record<string, unknown>)["__criticalError"] = err;
   console.error(err.stack);
 
   const body: ErrorResponse = {

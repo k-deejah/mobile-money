@@ -48,7 +48,7 @@ import { responseTime } from "./middleware/responseTime";
 import { requestId } from "./middleware/requestId";
 import { metricsMiddleware } from "./middleware/metrics";
 import { validateStellarNetwork, logStellarNetwork } from "./config/stellar";
-import { sessionAnomalyLogger } from "./services/logger";
+import { criticalErrorNotifier, sessionAnomalyLogger } from "./services/loggers";
 import { HealthCheckResponse, ReadinessCheckResponse } from "./types/api";
 import sep31Router from "./stellar/sep31";
 
@@ -120,6 +120,7 @@ app.use(
 app.use(limiter);
 app.use(responseTime);
 app.use(requestId);
+app.use(criticalErrorNotifier());
 
 // Session configuration with Redis store
 const sessionSecret =
