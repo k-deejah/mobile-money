@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { generateToken, verifyToken, JWTPayload } from '../auth/jwt';
+import { generateToken, verifyToken, JWTPayload, generateRefreshToken, verifyRefreshToken } from '../auth/jwt';
 
 export const authRoutes = Router();
 
@@ -9,7 +9,7 @@ export const authRoutes = Router();
  * Example login endpoint that generates a JWT token
  * In a real application, this would validate user credentials against a database
  */
-authRoutes.post('/login', (req: Request, res: Response) => {
+authRoutes.post('/login', async (req: Request, res: Response) => {
   const { userId, email } = req.body;
 
   // Basic validation
@@ -20,18 +20,16 @@ authRoutes.post('/login', (req: Request, res: Response) => {
     });
   }
 
-  // In a real app, you would:
-  // 1. Validate user credentials against database
-  // 2. Check password hash
-  // 3. Verify user is active
-  
   try {
     // Generate JWT token
     const token = generateToken({ userId, email });
-    
+    // Generate refresh token (new family)
+    const refreshToken = await generateRefreshToken(userId);
+
     res.json({
       message: 'Login successful',
       token,
+      refreshToken,
       user: {
         userId,
         email
@@ -40,6 +38,38 @@ authRoutes.post('/login', (req: Request, res: Response) => {
   } catch (error) {
     res.status(500).json({
       error: 'Token generation failed',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * POST /api/auth/refresh
+ *
+ * Rotates refresh token, issues new access and refresh tokens, and enforces strict rotation
+ */
+authRoutes.post('/refresh', async (req: Request, res: Response) => {
+  const { refreshToken } = req.body;
+  if (!refreshToken) {
+    return res.status(400).json({
+      error: 'Missing refresh token',
+      message: 'Refresh token is required'
+    });
+  }
+  try {
+    // Verify and check for reuse
+    const decoded = await verifyRefreshToken(refreshToken);
+    // Issue new access and refresh tokens (rotate)
+    const token = generateToken({ userId: decoded.userId, email: '' }); // You may want to fetch email if needed
+    const newRefreshToken = await generateRefreshToken(decoded.userId, decoded.familyId, decoded.tokenId);
+    res.json({
+      message: 'Token rotation successful',
+      token,
+      refreshToken: newRefreshToken
+    });
+  } catch (error) {
+    res.status(401).json({
+      error: 'Refresh failed',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }

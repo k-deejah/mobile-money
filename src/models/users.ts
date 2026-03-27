@@ -1,4 +1,5 @@
 import { pool } from "../config/database";
+import { encrypt, decrypt } from "../utils/encryption";
 
 export interface User {
   id: string;
@@ -19,10 +20,10 @@ export class UserModel {
     const row = result.rows[0];
     return {
       id: row.id,
-      phoneNumber: row.phone_number,
+      phoneNumber: decrypt(row.phone_number) as string,
       kycLevel: row.kyc_level,
-      email: row.email,
-      two_factor_secret: row.two_factor_secret ?? null,
+      email: decrypt(row.email) as string,
+      two_factor_secret: decrypt(row.two_factor_secret) ?? null,
       backup_codes: row.backup_codes ?? null,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -30,6 +31,7 @@ export class UserModel {
   }
 
   async updateEmail(id: string, email: string): Promise<void> {
-    await pool.query("UPDATE users SET email = $1 WHERE id = $2", [email, id]);
+    const encryptedEmail = encrypt(email);
+    await pool.query("UPDATE users SET email = $1 WHERE id = $2", [encryptedEmail, id]);
   }
 }
