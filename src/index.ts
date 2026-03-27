@@ -44,6 +44,7 @@ import { requestId } from "./middleware/requestId";
 import { metricsMiddleware } from "./middleware/metrics";
 import { validateStellarNetwork, logStellarNetwork } from "./config/stellar";
 import { HealthCheckResponse, ReadinessCheckResponse } from "./types/api";
+import sep31Router from "./stellar/sep31";
 
 dotenv.config();
 
@@ -210,6 +211,7 @@ app.use("/api/disputes", disputeRoutes);
 app.use("/api/stats", statsRoutes);
 app.use("/api/reports", reportsRoutes);
 app.use("/api/kyc", createKYCRoutes(pool));
+app.use("/sep31", sep31Router);
 
 app.use(
   (
