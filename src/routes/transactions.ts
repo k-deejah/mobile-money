@@ -18,6 +18,7 @@ import { validateTransaction } from "../middleware/validateTransaction";
 import { TimeoutPresets, haltOnTimedout } from "../middleware/timeout";
 import { authenticateToken } from "../middleware/auth";
 import { checkAccountStatusStrict } from "../middleware/checkAccountStatus";
+import { geolocateMiddleware } from "../middleware/geolocate";
 
 export const transactionRoutes = Router();
 
@@ -58,6 +59,7 @@ transactionRoutes.post(
   TimeoutPresets.long,
   haltOnTimedout,
   validateTransaction,
+  geolocateMiddleware,
   depositHandler,
 );
 
@@ -68,6 +70,7 @@ transactionRoutes.post(
   TimeoutPresets.long,
   haltOnTimedout,
   validateTransaction,
+  geolocateMiddleware,
   withdrawHandler,
 );
 
