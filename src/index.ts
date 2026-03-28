@@ -3,11 +3,11 @@ import express, { NextFunction, Request, Response } from "express";
 import { IncomingMessage } from "http";
 import cors from "cors";
 import helmet from "helmet";
-import rateLimit from "express-rate-limit";
+// replaced express-rate-limit with our redis-backed middleware
 import compression from "compression";
 import dotenv from "dotenv";
 
-import spdy from "spdy";
+import https from "https";
 import fs from "fs";
 import path from "path";
 import session from "express-session";
@@ -33,8 +33,7 @@ import { statsRoutes } from "./routes/stats";
 import { contactsRoutes } from "./routes/contacts";
 import { reportsRoutes } from "./routes/reports";
 import { createKYCRoutes } from "./routes/kycRoutes";
-import { vaultRoutes } from "./routes/vaults";
-import { adminRoutes } from "./routes/admin";
+import adminRoutes from "./routes/admin";
 import { authRoutes } from "./routes/auth";
 import { errorHandler } from "./middleware/errorHandler";
 import {
@@ -84,19 +83,7 @@ if (process.env.SENTRY_DSN) {
   Sentry.setupExpressErrorHandler(app);
 }
 
-const RATE_LIMIT_WINDOW_MS = parseInt(
-  process.env.RATE_LIMIT_WINDOW_MS || "900000",
-);
-const RATE_LIMIT_MAX_REQUESTS = parseInt(
-  process.env.RATE_LIMIT_MAX_REQUESTS || "100",
-);
-
-const limiter = rateLimit({
-  windowMs: RATE_LIMIT_WINDOW_MS,
-  max: RATE_LIMIT_MAX_REQUESTS,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+import rateLimitMiddleware from "./middleware/rateLimit";
 
 // 4. Custom Breadcrumb Enrichment
 app.use(sentryBreadcrumbMiddleware);
@@ -146,7 +133,7 @@ app.use(
     extended: true,
   }),
 );
-app.use(limiter);
+app.use(rateLimitMiddleware);
 app.use(responseTime);
 app.use(requestId);
 
@@ -304,7 +291,7 @@ async function initializeRuntime(): Promise<void> {
   const { createQueueDashboard } = await import("./queue/dashboard");
   app.use("/admin/queues", createQueueDashboard());
 
-  // 
+  //
   const useHTTP2 = process.env.USE_HTTP2 === "true";
 
   if (useHTTP2) {
@@ -312,12 +299,12 @@ async function initializeRuntime(): Promise<void> {
       key: fs.readFileSync(path.join(__dirname, "../certs/key.pem")),
       cert: fs.readFileSync(path.join(__dirname, "../certs/cert.pem")),
     };
-    spdy.createServer(sslOptions, app).listen(PORT, () => {
+    https.createServer(sslOptions, app).listen(PORT, () => {
       console.log(`HTTP/2 server running on https://localhost:${PORT}`);
     });
   } else {
     app.listen(PORT, () =>
-      console.log(`HTTP/1.1 server running on http://localhost:${PORT}`)
+      console.log(`HTTP/1.1 server running on http://localhost:${PORT}`),
     );
   }
 }
@@ -325,6 +312,5 @@ async function initializeRuntime(): Promise<void> {
 if (process.env.NODE_ENV !== "test") {
   void initializeRuntime();
 }
-
 
 export default app;
