@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { generateToken, verifyToken, JWTPayload, generateRefreshToken, verifyRefreshToken } from '../auth/jwt';
+import { evaluateGeoLoginAccess } from '../auth/geo';
 
 export const authRoutes = Router();
 
@@ -21,6 +22,14 @@ authRoutes.post('/login', async (req: Request, res: Response) => {
   }
 
   try {
+    const geoAccess = await evaluateGeoLoginAccess(req);
+    if (!geoAccess.allowed) {
+      return res.status(403).json({
+        error: 'Geographic restriction',
+        message: geoAccess.reason ?? 'Login is not permitted from your region'
+      });
+    }
+
     // Generate JWT token
     const token = generateToken({ userId, email });
     // Generate refresh token (new family)
