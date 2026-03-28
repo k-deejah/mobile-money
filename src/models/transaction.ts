@@ -234,6 +234,17 @@ export class TransactionModel {
     return mapTransactionRow(result.rows[0])!;
   }
 
+  async findByUserId(userId: string): Promise<Transaction[]> {
+    const result = await pool.query<Transaction>(
+      `SELECT ${TRANSACTION_SELECT_COLUMNS}
+       FROM transactions
+       WHERE user_id = $1`,
+      [userId],
+    );
+
+    return result.rows;
+  }
+
   async findById(id: string): Promise<Transaction | null> {
     const result = await pool.query<Transaction>(
       `SELECT ${TRANSACTION_SELECT_COLUMNS}

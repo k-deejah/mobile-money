@@ -11,6 +11,8 @@ export interface User {
   status: 'active' | 'frozen' | 'suspended';
   createdAt: Date;
   updatedAt: Date;
+  // TODO: The `User` type and database table needs to
+  // be update with these fields:  is_active: boolean,   deactivated_at:Date`
 }
 
 export class UserModel {
