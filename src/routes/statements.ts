@@ -48,7 +48,7 @@ interface MonthlyStatement {
  */
 statementsRoutes.get(
   "/monthly/:year/:month",
-  TimeoutPresets.MEDIUM,
+  TimeoutPresets.medium,
   requireAuth,
   async (req: AuthRequest, res: Response) => {
     try {
