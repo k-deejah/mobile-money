@@ -17,6 +17,21 @@ export interface WebhookPayload {
   data: Record<string, string>;
 }
 
+export type WebhookOutboxStatus = "pending" | "processing" | "delivered" | "failed";
+
+export interface WebhookOutboxEntry {
+  id: string;
+  eventType: string;
+  payload: WebhookPayload | FlatWebhookPayload;
+  status: WebhookOutboxStatus;
+  attempts: number;
+  maxAttempts: number;
+  lastAttemptAt?: Date;
+  nextAttemptAt?: Date;
+  errorMessage?: string;
+  createdAt: Date;
+}
+
 /**
  * Flat webhook payload optimized for Zapier/Make.com
  */
@@ -76,6 +91,13 @@ interface WebhookTransactionModel {
     id: string,
     delivery: WebhookDeliveryUpdate,
   ): Promise<void>;
+}
+
+export interface WebhookOutboxModel {
+  insert(entry: Omit<WebhookOutboxEntry, "id" | "createdAt">): Promise<string>;
+  findNextToProcess(limit: number): Promise<WebhookOutboxEntry[]>;
+  update(id: string, update: Partial<WebhookOutboxEntry>): Promise<void>;
+  delete(id: string): Promise<void>;
 }
 
 function wait(ms: number): Promise<void> {
@@ -154,12 +176,12 @@ export class WebhookService {
 
   buildFlatPayload(event: WebhookEvent, transaction: Transaction): FlatWebhookPayload {
     const eventId = `evt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
+
     const payload: FlatWebhookPayload = {
       event_id: eventId,
       event_type: event,
       timestamp: this.now().toISOString(),
-      
+
       transaction_id: transaction.id,
       reference_number: transaction.referenceNumber,
       transaction_type: transaction.type,
@@ -169,14 +191,14 @@ export class WebhookService {
       provider: transaction.provider,
       stellar_address: transaction.stellarAddress,
       status: transaction.status,
-      
+
       user_id: transaction.userId || undefined,
       notes: transaction.notes || undefined,
       tags: transaction.tags ? transaction.tags.join(",") : undefined,
-      
+
       created_at: transaction.createdAt.toISOString(),
       updated_at: transaction.updatedAt ? transaction.updatedAt.toISOString() : undefined,
-      
+
       webhook_delivery_status: (transaction as any).webhook_delivery_status,
       webhook_delivered_at: (transaction as any).webhook_delivered_at ? (transaction as any).webhook_delivered_at.toISOString() : undefined
     };
@@ -386,6 +408,83 @@ export class WebhookService {
       lastError,
     };
   }
+
+  /**
+   * Process a batch of entries from the webhook outbox.
+   * Implementing the worker part of the Outbox Pattern.
+   */
+  async processOutbox(
+    outboxModel: WebhookOutboxModel,
+    batchSize: number = 10,
+  ): Promise<{ processed: number; failures: number }> {
+    const entries = await outboxModel.findNextToProcess(batchSize);
+    let processed = 0;
+    let failures = 0;
+
+    for (const entry of entries) {
+      const rawPayload = JSON.stringify(entry.payload);
+      const signature = this.signPayload(rawPayload);
+      const now = this.now();
+
+      try {
+        const response = await this.fetchImpl(this.webhookUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Webhook-Signature": signature,
+          },
+          body: rawPayload,
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        this.logger.log(`[webhook-outbox] Delivered entry=${entry.id}`);
+
+        // Successfully delivered
+        await outboxModel.update(entry.id, {
+          status: "delivered",
+          attempts: entry.attempts + 1,
+          lastAttemptAt: now,
+          errorMessage: undefined,
+        });
+
+        processed++;
+      } catch (error) {
+        failures++;
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const attempts = entry.attempts + 1;
+
+        if (attempts >= entry.maxAttempts) {
+          await outboxModel.update(entry.id, {
+            status: "failed",
+            attempts,
+            lastAttemptAt: now,
+            errorMessage: `Exhausted retries: ${errorMessage}`,
+          });
+        } else {
+          // Exponential backoff for retries
+          const backoffMs = this.baseDelayMs * Math.pow(2, attempts - 1);
+          const nextAttemptAt = new Date(now.getTime() + backoffMs);
+
+          await outboxModel.update(entry.id, {
+            status: "pending", // Reset to pending for next retry
+            attempts,
+            lastAttemptAt: now,
+            nextAttemptAt,
+            errorMessage,
+          });
+        }
+
+        this.logger.warn(
+          `[webhook-outbox] Failed to deliver entry=${entry.id} attempt=${attempts}/${entry.maxAttempts}: ${errorMessage}`,
+        );
+      }
+    }
+
+    return { processed, failures };
+  }
 }
 
 export async function notifyTransactionWebhook(
@@ -419,6 +518,43 @@ export async function notifyTransactionWebhook(
   });
 
   return result;
+}
+
+/**
+ * Records a webhook event into the outbox for asynchronous processing.
+ * This should be called within the same database transaction as the business operation.
+ */
+export async function enqueueTransactionWebhook(
+  transactionId: string,
+  event: WebhookEvent,
+  dependencies: {
+    transactionModel: WebhookTransactionModel;
+    outboxModel: WebhookOutboxModel;
+    webhookService?: WebhookService;
+    useFlatPayload?: boolean;
+  },
+): Promise<string | null> {
+  const webhookService = dependencies.webhookService ?? new WebhookService();
+  const transaction = await dependencies.transactionModel.findById(transactionId);
+
+  if (!transaction) {
+    return null;
+  }
+
+  const payload = dependencies.useFlatPayload
+    ? webhookService.buildFlatPayload(event, transaction)
+    : webhookService.buildPayload(event, transaction);
+
+  const entryId = await dependencies.outboxModel.insert({
+    eventType: event,
+    payload,
+    status: "pending",
+    attempts: 0,
+    maxAttempts: 5,
+    nextAttemptAt: new Date(),
+  });
+
+  return entryId;
 }
 
 export async function notifyFlatTransactionWebhook(

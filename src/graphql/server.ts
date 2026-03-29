@@ -11,6 +11,12 @@ import { typeDefs } from "./schema";
 import { resolvers, subscriptionResolvers } from "./resolvers";
 import { buildGraphqlContext } from "./context";
 import { Server } from "http";
+import depthLimit from "graphql-depth-limit";
+import {
+  createComplexityRule,
+  simpleEstimator,
+  fieldExtensionsEstimator,
+} from "graphql-query-complexity";
 
 // Merge resolvers with subscription resolvers
 const mergedResolvers = {
@@ -30,6 +36,16 @@ export async function startApolloServer(
   const server = new ApolloServer({
     schema,
     context: ({ req }: { req: Request }) => buildGraphqlContext(req),
+    validationRules: [
+      depthLimit(5),
+      createComplexityRule({
+        maximumComplexity: 1000,
+        estimators: [
+          fieldExtensionsEstimator(),
+          simpleEstimator({ defaultComplexity: 1 }),
+        ],
+      }),
+    ],
     plugins: [
       process.env.NODE_ENV === "production"
         ? ApolloServerPluginLandingPageProductionDefault({ footer: false })

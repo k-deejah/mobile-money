@@ -1,5 +1,5 @@
 import dotenv from "dotenv";
-import { cleanEnv, str } from "envalid";
+import { cleanEnv, str, bool } from "envalid";
 
 // Load environment variables first
 dotenv.config();
@@ -33,7 +33,25 @@ export const env = cleanEnv(process.env, {
     default: "development-encryption-key-32-chars-long",
     desc: "Secret key for PII encryption in database",
   }),
+  PAGERDUTY_INTEGRATION_KEY: str({
+    default: "",
+    desc: "PagerDuty Events API V2 Integration Key for alert routing",
+    example: "R1234567890abcdef",
+  }),
+  PAGERDUTY_DEDUP_KEY: str({
+    default: "mobile-money",
+    desc: "PagerDuty deduplication key prefix for incident grouping",
+  }),
 });
 
 // Re-export specific values for convenience
-export const { DATABASE_URL, STELLAR_ISSUER_SECRET, REDIS_URL, STELLAR_HORIZON_URL, STELLAR_NETWORK, DB_ENCRYPTION_KEY } = env;
+export const { 
+  DATABASE_URL, 
+  STELLAR_ISSUER_SECRET, 
+  REDIS_URL, 
+  STELLAR_HORIZON_URL, 
+  STELLAR_NETWORK, 
+  DB_ENCRYPTION_KEY,
+  PAGERDUTY_INTEGRATION_KEY,
+  PAGERDUTY_DEDUP_KEY,
+} = env;

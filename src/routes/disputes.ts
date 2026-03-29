@@ -67,7 +67,7 @@ import { requirePermission } from "../middleware/rbac";
 
 const VALID_STATUSES: DisputeStatus[] = [
   "open",
-  "investigating", 
+  "investigating",
   "resolved",
   "rejected",
 ];
@@ -75,7 +75,7 @@ const VALID_STATUSES: DisputeStatus[] = [
 const VALID_PRIORITIES: DisputePriority[] = [
   "low",
   "medium",
-  "high", 
+  "high",
   "critical",
 ];
 
@@ -90,6 +90,21 @@ export const transactionDisputeRoutes = Router({ mergeParams: true });
 
 /**
  * POST /api/transactions/:id/dispute
+ *
+ * Opens a dispute for a transaction and automatically creates a support ticket
+ * (Zendesk/Intercom) with full transaction context.
+ *
+ * Body: {
+ *   reason: string,
+ *   reportedBy?: string,
+ *   priority?: string,
+ *   category?: string,
+ *   requesterEmail?: string  // Email for support ticket requester
+ * }
+ *
+ * Response includes:
+ *   - supportTicketId: Instant ticket ID from support provider
+ *   - supportTicketUrl: Direct link to the support ticket
  */
 transactionDisputeRoutes.post(
   "/:id/dispute",
@@ -97,7 +112,7 @@ transactionDisputeRoutes.post(
   requirePermission("dispute:create"),
   async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { reason, reportedBy, priority, category } = req.body;
+    const { reason, reportedBy, priority, category, requesterEmail } = req.body;
 
     if (!reason || typeof reason !== "string" || reason.trim().length === 0) {
       return res.status(400).json({
@@ -111,6 +126,16 @@ transactionDisputeRoutes.post(
       });
     }
 
+    // Validate requesterEmail if provided
+    if (requesterEmail && typeof requesterEmail === "string") {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(requesterEmail)) {
+        return res.status(400).json({
+          error: 'Invalid "requesterEmail" format',
+        });
+      }
+    }
+
     try {
       const dispute = await disputeService.openDispute(
         id,
@@ -118,6 +143,7 @@ transactionDisputeRoutes.post(
         reportedBy,
         priority,
         category,
+        requesterEmail,
       );
       return res.status(201).json(dispute);
     } catch (error) {
@@ -146,7 +172,7 @@ export const disputeRoutes = Router();
  * Must be defined before /:disputeId so "report" is not treated as an ID.
  */
 disputeRoutes.get(
-  "/report", 
+  "/report",
   requireAuth,
   requirePermission("dispute:read"),
   async (req: Request, res: Response) => {
@@ -190,8 +216,8 @@ disputeRoutes.get(
     const days = req.query.days ? parseInt(req.query.days as string, 10) : 30;
 
     if (isNaN(days) || days < 1 || days > 365) {
-      return res.status(400).json({ 
-        error: "Invalid days parameter. Must be between 1 and 365" 
+      return res.status(400).json({
+        error: "Invalid days parameter. Must be between 1 and 365"
       });
     }
 
@@ -248,7 +274,7 @@ disputeRoutes.post(
  * GET /api/disputes/:disputeId
  */
 disputeRoutes.get(
-  "/:disputeId", 
+  "/:disputeId",
   requireAuth,
   requirePermission("dispute:read"),
   async (req: Request, res: Response) => {
@@ -305,7 +331,7 @@ disputeRoutes.patch(
     try {
       // Get current dispute to validate transition
       const currentDispute = await disputeService.getDispute(req.params.disputeId);
-      
+
       // Validate state transition
       const validation = stateMachine.validateTransition(
         currentDispute.status,
@@ -335,7 +361,7 @@ disputeRoutes.patch(
       const code = message.includes("not found")
         ? 404
         : message.includes("Cannot transition") ||
-            message.includes("resolution text")
+        message.includes("resolution text")
           ? 422
           : 500;
       return res.status(code).json({ error: message });
@@ -417,7 +443,7 @@ disputeRoutes.post(
  * POST /api/disputes/:disputeId/notes
  */
 disputeRoutes.post(
-  "/:disputeId/notes", 
+  "/:disputeId/notes",
   requireAuth,
   requirePermission("dispute:update"),
   async (req: Request, res: Response) => {
@@ -526,8 +552,8 @@ disputeRoutes.post(
     for (const file of files) {
       const validation = validateDisputeEvidenceFile(file);
       if (!validation.valid) {
-        return res.status(400).json({ 
-          error: `File "${file.originalname}": ${validation.error}` 
+        return res.status(400).json({
+          error: `File "${file.originalname}": ${validation.error}`
         });
       }
     }
@@ -543,7 +569,7 @@ disputeRoutes.post(
       // Check for upload failures
       const failedUploads = uploadResults.filter(r => !r.success);
       if (failedUploads.length > 0) {
-        return res.status(500).json({ 
+        return res.status(500).json({
           error: "Some files failed to upload",
           failures: failedUploads,
         });

@@ -1,0 +1,106 @@
+app:
+  enabled: true
+  replicaCount: 3
+  image:
+    repository: shantelpeters/mobile-money
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 3000
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  prometheusScrape: true
+
+worker:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: shantelpeters/mobile-money
+    tag: latest
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+redis:
+  enabled: true
+  image:
+    repository: redis
+    tag: 7-alpine
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 6379
+  persistence:
+    enabled: true
+    storageClass: null
+    accessModes:
+      - ReadWriteOnce
+    size: 1Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+
+config:
+  nodeEnv: production
+  port: 3000
+  stellarNetwork: TESTNET
+  compressionEnabled: "true"
+  rateLimitWindowMs: 900000
+  rateLimitMaxRequests: 100
+  requestSizeLimit: 10mb
+  prometheusScrape: true
+
+secrets:
+  enabled: true
+  databaseUrl: ""
+  redisUrl: ""
+  sessionSecret: "change-this-secret"
+  stellarIssuerSecret: "change-this-secret"
+  mtnApiKey: ""
+  mtnApiSecret: ""
+  mtnSubscriptionKey: ""
+  airtelApiKey: ""
+  airtelApiSecret: ""
+  orangeApiKey: ""
+  orangeApiSecret: ""
+  adminApiKey: ""
+  oauthClientId: ""
+  oauthClientSecret: ""
+  oauthRedirectUri: ""
+  oauthJwtSecret: ""
+
+imagePullSecrets: []
+podAnnotations: {}
+serviceAnnotations: {}
+
+workerCommand:
+  - node
+  - dist/src/queue/worker.js

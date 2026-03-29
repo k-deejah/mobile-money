@@ -1,18 +1,12 @@
 import { Router, Request, Response } from 'express';
-import {
-  generateToken,
-  verifyToken,
-  JWTPayload,
-  generateRefreshToken,
-  verifyRefreshToken,
-} from '../auth/jwt';
-import {
-  authenticateUser,
-  getUserPermissions,
-} from '../services/userService';
-import { authenticateToken } from '../middleware/auth';
+import { generateToken, verifyToken, JWTPayload, generateRefreshToken, verifyRefreshToken } from '../auth/jwt';
+import { createSSORouter } from '../auth/sso';
+import { enforceSSOForEmployees } from '../middleware/ssoEnforcement';
 
 export const authRoutes = Router();
+
+// Mount SSO routes
+authRoutes.use('/sso', createSSORouter());
 
 /**
  * POST /api/auth/login
