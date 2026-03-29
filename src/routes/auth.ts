@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { generateToken, verifyToken, JWTPayload, generateRefreshToken, verifyRefreshToken } from '../auth/jwt';
 import { createSSORouter } from '../auth/sso';
 import { enforceSSOForEmployees } from '../middleware/ssoEnforcement';
+import { tokenController } from '../controllers/tokenController';
 
 export const authRoutes = Router();
 
@@ -94,6 +95,27 @@ authRoutes.post('/refresh', async (req: Request, res: Response) => {
     });
   }
 });
+
+/**
+ * GET /api/auth/tokens
+ *
+ * List all active refresh token
+ */
+authRoutes.get("/active-tokens", authenticateToken, tokenController.findAll);
+
+/**
+ * DELETE /api/auth/tokens
+ *
+ * Delete a specific refresh token
+ */ 
+authRoutes.delete("/:tokenId", authenticateToken, tokenController.revoke);
+
+/**
+ * DELETE /api/auth/tokens
+ *
+ * Delete all refresh token
+ */ 
+authRoutes.delete("/revoke-all", authenticateToken, tokenController.revokeAll);
 
 /**
  * POST /api/auth/verify
