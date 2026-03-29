@@ -4,7 +4,8 @@ import { runCleanupJob } from "./cleanupJob";
 import { runReportJob } from "./reportJob";
 import { runStatusCheckJob } from "./statusCheckJob";
 import { runDisputeSlaJob } from "./disputeSlaJob";
-import { runProviderBalanceAlertJob } from "./balances";
+import { MonitoringService } from "../services/monitoringService";
+import { createPagerDutyService } from "../services/pagerDutyService";
 
 interface JobConfig {
   name: string;
@@ -56,6 +57,13 @@ async function runJob(job: JobConfig): Promise<void> {
 }
 
 export function startJobs(): void {
+  // Initialize PagerDuty integration for monitoring
+  const pagerDutyService = createPagerDutyService();
+  MonitoringService.initialize(pagerDutyService);
+
+  // Start the monitoring service (checks every 30 seconds)
+  MonitoringService.start();
+
   for (const job of JOBS) {
     if (!cron.validate(job.schedule)) {
       console.error(
