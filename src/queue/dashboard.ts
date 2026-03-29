@@ -1,19 +1,14 @@
-import { ExpressAdapter } from "@bull-board/express";
-import { createBullBoard } from "@bull-board/api";
-import { BullMQAdapter } from "@bull-board/api/dist/queueAdapters/bullMQ";
-import { transactionQueue } from "./transactionQueue";
-import { providerBalanceAlertQueue } from "./providerBalanceAlertQueue";
-import { deadLetterQueue } from "./dlq";
-
-const createQueueAdapter = (queue: any) => {
-  return new BullMQAdapter(queue, {
-    readOnlyMode: false,
-  });
-};
+import { Router } from "express";
 
 export function createQueueDashboard() {
-  const serverAdapter = new ExpressAdapter();
+  const router = Router();
 
+  router.get("/", (req, res) => {
+    res.send(`
+      <h1>Queue Dashboard</h1>
+      <p>The queue dashboard has been migrated to RabbitMQ.</p>
+      <p>Please use the RabbitMQ Management UI to monitor queues.</p>
+    `);
   createBullBoard({
     queues: [
       createQueueAdapter(),
@@ -31,7 +26,6 @@ export function createQueueDashboard() {
     },
   });
 
-  serverAdapter.setBasePath("/admin/queues");
-
-  return serverAdapter.getRouter();
+  return router;
 }
+
