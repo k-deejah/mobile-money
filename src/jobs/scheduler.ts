@@ -7,6 +7,7 @@ import { runDisputeSlaJob } from "./disputeSlaJob";
 import { MonitoringService } from "../services/monitoringService";
 import { createPagerDutyService } from "../services/pagerDutyService";
 import { runProviderBalanceAlertJob } from "./balances";
+import { runDailyPnlJob } from "./pnl";
 
 interface JobConfig {
   name: string;
@@ -44,6 +45,16 @@ const JOBS: JobConfig[] = [
     // Every 10 minutes - checks MTN/Airtel operational balances and alerts treasury when low
     schedule: process.env.PROVIDER_BALANCE_ALERT_CRON || "*/10 * * * *",
     handler: runProviderBalanceAlertJob,
+  },
+  {
+    name: "daily-pnl",
+    // Daily at 01:00 AM - aggregates fees collected vs provider costs for yesterday
+    schedule: process.env.DAILY_PNL_CRON || "0 1 * * *",
+    handler: () => {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      return runDailyPnlJob(yesterday.toISOString().slice(0, 10)).then(() => undefined);
+    },
   },
 ];
 
