@@ -13,8 +13,7 @@ import { KYCService } from "../services/kyc/kycService";
 import { MobileMoneyProvider, validateProviderLimits } from "../config/providers";
 import type { TransactionJobData } from "../queue/transactionQueue";
 import { amlService } from "../services/aml";
-import { maskPhoneNumber } from "../utils/masking";
-
+import { travelRuleService } from "../compliance/travelRule";
 import {
   CancelTransactionResponse,
   LimitExceededErrorResponse,
@@ -278,6 +277,51 @@ async function monitorTransactionForAML(transaction: Transaction): Promise<void>
   }
 }
 
+/**
+ * Captures Travel Rule identity data for deposits >= $1,000.
+ * Derives sender/receiver from the transaction record.
+ * PII is encrypted at rest inside travelRuleService.capture().
+ */
+async function applyTravelRule(transaction: Transaction): Promise<void> {
+  if (transaction.type !== "deposit") return;
+
+  const amount = Number(transaction.amount);
+  if (!travelRuleService.applies(amount)) return;
+
+  try {
+    // Sender = the mobile money account holder initiating the deposit
+    // Receiver = the Stellar address receiving the funds
+    // Full KYC identity should be supplied by the caller via req.body.travelRule;
+    // here we fall back to the phone number / stellar address as account identifiers.
+    await travelRuleService.capture({
+      transactionId: transaction.id,
+      amount,
+      currency: transaction.currency ?? "USD",
+      sender: {
+        name: transaction.metadata?.senderName as string ?? "Unknown",
+        account: transaction.phoneNumber,
+        address: transaction.metadata?.senderAddress as string | undefined,
+        dob: transaction.metadata?.senderDob as string | undefined,
+        idNumber: transaction.metadata?.senderIdNumber as string | undefined,
+      },
+      receiver: {
+        name: transaction.metadata?.receiverName as string ?? "Unknown",
+        account: transaction.stellarAddress,
+        address: transaction.metadata?.receiverAddress as string | undefined,
+      },
+      originatingVasp: transaction.provider,
+    });
+
+    await transactionModel.addTags(transaction.id, ["travel-rule-captured"]);
+  } catch (error) {
+    // Non-fatal — log and continue; compliance team can back-fill
+    console.error(
+      `[travel-rule] capture failed for transaction ${transaction.id}:`,
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
+
 function isUniqueViolation(error: unknown): boolean {
   if (!error || typeof error !== "object") {
     return false;
@@ -381,6 +425,7 @@ async function processTransactionRequest(
               locationMetadata: req.geoLocation ?? null,
             });
             void monitorTransactionForAML(transaction);
+            void applyTravelRule(transaction);
 
             const job = await addTransactionJob(
               {

@@ -62,6 +62,7 @@ import { validateStellarNetwork, logStellarNetwork } from "./config/stellar";
 import { sessionAnomalyLogger } from "./services/logger";
 import { HealthCheckResponse, ReadinessCheckResponse } from "./types/api";
 import { privacyRoutes } from "./routes/privacy";
+import { travelRuleRoutes } from "./routes/travelRule";
 import sep31Router from "./stellar/sep31";
 import sep24Router from "./stellar/sep24";
 import sep38Router from "./stellar/sep38";
@@ -315,6 +316,7 @@ app.use("/api/v1/transactions/bulk", bulkRoutesV1);
 app.use("/api/v1/disputes", disputeRoutesV1);
 app.use("/api/v1/stats", statsRoutesV1);
 app.use("/api/v1/vaults", vaultRoutesV1);
+app.use("/api/v1/compliance/travel-rule", travelRuleRoutes);
 
 const deprecatedApiV1Handler: express.RequestHandler = (req, res, next) => {
   const versionedReq = req as VersionedRequest;
