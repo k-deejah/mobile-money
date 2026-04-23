@@ -31,7 +31,11 @@ export const env = cleanEnv(process.env, {
   }),
   DB_ENCRYPTION_KEY: str({
     default: "development-encryption-key-32-chars-long",
-    desc: "Secret key for PII encryption in database",
+    desc: "Secret key for PII encryption in database (AES-256-GCM global key material)",
+  }),
+  PII_MASTER_KEY: str({
+    default: "development-pii-master-key-32-chars!",
+    desc: "Master key for per-user HKDF key derivation. Must be a high-entropy secret in production. Never log or expose this value.",
   }),
   REFRESH_TOKEN_EXPIRES_IN: str({
     default: process.env.REFRESH_TOKEN_EXPIRES_IN,
@@ -68,6 +72,7 @@ export const {
   STELLAR_HORIZON_URL,
   STELLAR_NETWORK,
   DB_ENCRYPTION_KEY,
+  PII_MASTER_KEY,
   PAGERDUTY_INTEGRATION_KEY,
   PAGERDUTY_DEDUP_KEY,
 } = env;
