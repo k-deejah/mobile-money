@@ -7,6 +7,7 @@ import { runDisputeSlaJob } from "./disputeSlaJob";
 import { MonitoringService } from "../services/monitoringService";
 import { createPagerDutyService } from "../services/pagerDutyService";
 import { runProviderBalanceAlertJob } from "./balances";
+import { runProviderHealthCheckJob } from "./providerHealthCheck";
 
 interface JobConfig {
   name: string;
@@ -44,6 +45,12 @@ const JOBS: JobConfig[] = [
     // Every 10 minutes - checks MTN/Airtel operational balances and alerts treasury when low
     schedule: process.env.PROVIDER_BALANCE_ALERT_CRON || "*/10 * * * *",
     handler: runProviderBalanceAlertJob,
+  },
+  {
+    name: "provider-health-check",
+    // Every 5 minutes - polls provider APIs for uptime and alerts on outages
+    schedule: process.env.PROVIDER_HEALTH_CHECK_CRON || "*/5 * * * *",
+    handler: runProviderHealthCheckJob,
   },
 ];
 
