@@ -269,3 +269,37 @@ export async function authorizeDynamic(userId: string, role: string, resourceTyp
   const obj = { type: resourceType, checkOwner: checkOwner, ownerUserId: resourceOwnerUserId };
   return await e.enforce(sub, obj, action);
 }
+
+/**
+ * Issue #518: API Key Scope Middleware
+ *
+ * Checks that the authenticated API key has the required permission bit(s).
+ * If the request was NOT authenticated via an API key (e.g. JWT), it passes through.
+ *
+ * Usage:
+ *   router.post('/deposit', checkApiKeyScope(ApiKeyPermission.DEPOSIT), depositHandler);
+ *   router.get('/transactions', checkApiKeyScope(ApiKeyPermission.READ), listHandler);
+ */
+export function checkApiKeyScope(requiredPermission: number) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    // Only enforce scope when request was authenticated via API key
+    const apiKeyPermissions = (req as any).apiKeyPermissions;
+
+    // If no API key permissions are set, the request used JWT auth — pass through
+    if (apiKeyPermissions === undefined || apiKeyPermissions === null) {
+      return next();
+    }
+
+    // Check that the required permission bit(s) are set
+    if ((apiKeyPermissions & requiredPermission) !== requiredPermission) {
+      return res.status(403).json({
+        error: "Forbidden",
+        message: "API key does not have the required permission for this operation",
+        required_permission: requiredPermission,
+        granted_permissions: apiKeyPermissions,
+      });
+    }
+
+    next();
+  };
+}

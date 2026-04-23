@@ -83,6 +83,8 @@ export const requireAuth = (
       id: "admin-system",
       role: "admin",
     };
+    // Issue #518: Admin keys get full permissions
+    (req as any).apiKeyPermissions = 0x0f; // ApiKeyPermission.ALL
 
     return next();
   }
