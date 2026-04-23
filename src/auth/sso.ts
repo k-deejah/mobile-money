@@ -148,8 +148,8 @@ export class SSOService {
     };
 
     const strategy = new SamlStrategy(
-      samlConfig,
-      async (
+      samlConfig as any,
+      (async (
         profile: SamlProfile | null | undefined,
         done: VerifiedCallback
       ) => {
@@ -167,7 +167,7 @@ export class SSOService {
         } catch (error) {
           return done(error as Error);
         }
-      }
+      }) as any
     );
 
     passport.use(`saml-${provider.id}`, strategy as unknown as passport.Strategy);

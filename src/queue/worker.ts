@@ -11,6 +11,7 @@ import { EmailService } from "../services/email";
 import { UserModel } from "../models/users";
 import { withRetry } from "../services/retry";
 import { WhatsappService } from "../services/whatsapp";
+import { SmsService } from "../services/sms";
 import { notifyTransactionWebhook, WebhookService } from "../services/webhook";
 import { pushNotificationService } from "../services/push";
 import { capturePersistentFailure } from "./dlq";
@@ -20,6 +21,7 @@ const stellarService = new StellarService();
 const emailService = new EmailService();
 const userModel = new UserModel();
 const whatsappService = new WhatsappService();
+const smsService = new SmsService();
 const webhookService = new WebhookService();
 const pushService = pushNotificationService;
 
