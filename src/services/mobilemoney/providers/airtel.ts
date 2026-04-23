@@ -150,6 +150,25 @@ export class AirtelService {
     });
   }
 
+  async getTransactionStatus(
+    reference: string,
+  ): Promise<{ status: "completed" | "failed" | "pending" | "unknown" }> {
+    try {
+      const result = await this.checkStatus(reference);
+      if (!result.success) return { status: "unknown" };
+      const txStatus = String(
+        (result.data as AirtelResponse)?.data?.transaction?.status ?? "",
+      ).toUpperCase();
+      // Airtel status codes: TS = success, TF = failed, TP = pending
+      if (txStatus === "TS") return { status: "completed" };
+      if (txStatus === "TF") return { status: "failed" };
+      if (txStatus === "TP") return { status: "pending" };
+      return { status: "unknown" };
+    } catch {
+      return { status: "unknown" };
+    }
+  }
+
   async checkStatus(reference: string) {
     const token = await this.authenticate();
 

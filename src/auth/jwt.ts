@@ -37,6 +37,7 @@ export interface JWTPayload {
   email: string;
   role?: string;
   impersonation?: JWTImpersonationClaim;
+  tokenVersion?: number;
   iat?: number;
   exp?: number;
 }

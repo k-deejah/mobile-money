@@ -10,9 +10,13 @@ import {
 import { lockManager, LockKeys } from "../utils/lock";
 import { TransactionLimitService } from "../services/transactionLimit/transactionLimitService";
 import { KYCService } from "../services/kyc/kycService";
-import { MobileMoneyProvider, validateProviderLimits } from "../config/providers";
+import {
+  MobileMoneyProvider,
+  validateProviderLimits,
+} from "../config/providers";
 import type { TransactionJobData } from "../queue/transactionQueue";
 import { amlService } from "../services/aml";
+import { travelRuleService } from "../compliance/travelRule";
 import {
   CancelTransactionResponse,
   LimitExceededErrorResponse,
@@ -20,7 +24,6 @@ import {
   TransactionDetailResponse,
   TransactionResponse,
 } from "../types/api";
-
 
 const IDEMPOTENCY_TTL_HOURS = Number(
   process.env.IDEMPOTENCY_KEY_TTL_HOURS || 24,
@@ -145,7 +148,9 @@ export const getTransactionHistoryHandler = async (
       minAmount: minAmount ? parseFloat(minAmount as string) : undefined,
       maxAmount: maxAmount ? parseFloat(maxAmount as string) : undefined,
       provider: provider as string | undefined,
-      tags: tags ? (tags as string).split(",").map((t) => t.trim().toLowerCase()) : undefined,
+      tags: tags
+        ? (tags as string).split(",").map((t) => t.trim().toLowerCase())
+        : undefined,
     };
 
     // Database Queries
@@ -224,7 +229,9 @@ function buildTransactionResponse(
   };
 }
 
-async function monitorTransactionForAML(transaction: Transaction): Promise<void> {
+async function monitorTransactionForAML(
+  transaction: Transaction,
+): Promise<void> {
   if (!transaction.userId) return;
 
   const amount = Number(transaction.amount);
@@ -276,6 +283,51 @@ async function monitorTransactionForAML(transaction: Transaction): Promise<void>
   }
 }
 
+/**
+ * Captures Travel Rule identity data for deposits >= $1,000.
+ * Derives sender/receiver from the transaction record.
+ * PII is encrypted at rest inside travelRuleService.capture().
+ */
+async function applyTravelRule(transaction: Transaction): Promise<void> {
+  if (transaction.type !== "deposit") return;
+
+  const amount = Number(transaction.amount);
+  if (!travelRuleService.applies(amount)) return;
+
+  try {
+    // Sender = the mobile money account holder initiating the deposit
+    // Receiver = the Stellar address receiving the funds
+    // Full KYC identity should be supplied by the caller via req.body.travelRule;
+    // here we fall back to the phone number / stellar address as account identifiers.
+    await travelRuleService.capture({
+      transactionId: transaction.id,
+      amount,
+      currency: transaction.currency ?? "USD",
+      sender: {
+        name: transaction.metadata?.senderName as string ?? "Unknown",
+        account: transaction.phoneNumber,
+        address: transaction.metadata?.senderAddress as string | undefined,
+        dob: transaction.metadata?.senderDob as string | undefined,
+        idNumber: transaction.metadata?.senderIdNumber as string | undefined,
+      },
+      receiver: {
+        name: transaction.metadata?.receiverName as string ?? "Unknown",
+        account: transaction.stellarAddress,
+        address: transaction.metadata?.receiverAddress as string | undefined,
+      },
+      originatingVasp: transaction.provider,
+    });
+
+    await transactionModel.addTags(transaction.id, ["travel-rule-captured"]);
+  } catch (error) {
+    // Non-fatal — log and continue; compliance team can back-fill
+    console.error(
+      `[travel-rule] capture failed for transaction ${transaction.id}:`,
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
+
 function isUniqueViolation(error: unknown): boolean {
   if (!error || typeof error !== "object") {
     return false;
@@ -297,6 +349,11 @@ async function processTransactionRequest(
   type: TransactionRequestType,
 ): Promise<Response> {
   try {
+    // Normalize provider to lowercase
+    if (typeof req.body.provider === "string") {
+      req.body.provider = req.body.provider.toLowerCase();
+    }
+
     const { amount, phoneNumber, provider, stellarAddress, userId, notes } =
       req.body;
 
@@ -379,6 +436,7 @@ async function processTransactionRequest(
               locationMetadata: req.geoLocation ?? null,
             });
             void monitorTransactionForAML(transaction);
+            void applyTravelRule(transaction);
 
             const job = await addTransactionJob(
               {
@@ -577,6 +635,53 @@ export const updateNotesHandler = async (req: Request, res: Response) => {
   }
 };
 
+export const refundTransactionHandler = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const transaction = await transactionModel.findById(id);
+    if (!transaction) {
+      return res.status(404).json({ error: "Transaction not found" });
+    }
+
+    if (transaction.type !== "withdraw") {
+      return res.status(400).json({
+        error: "Only withdrawal transactions can be refunded",
+      });
+    }
+
+    if (transaction.status !== TransactionStatus.Failed) {
+      return res.status(400).json({
+        error: `Cannot refund transaction with status '${transaction.status}'. Only failed transactions are eligible.`,
+      });
+    }
+
+    const amount = parseFloat(transaction.amount);
+    const { calculateFee } = await import("../utils/fees");
+    const { fee } = await calculateFee(amount);
+    const refundAmount = parseFloat((amount - fee).toFixed(2));
+
+    if (refundAmount <= 0) {
+      return res.status(400).json({
+        error: "Refund amount after fees is zero or negative",
+      });
+    }
+
+    await transactionModel.updateStatus(id, TransactionStatus.Completed);
+
+    return res.json({
+      message: "Refund processed successfully",
+      transactionId: id,
+      originalAmount: amount,
+      feeDeducted: fee,
+      refundAmount,
+    });
+  } catch (err) {
+    console.error("Refund error:", err);
+    return res.status(500).json({ error: "Failed to process refund" });
+  }
+};
+
 export const updateAdminNotesHandler = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -641,14 +746,8 @@ export const searchTransactionsHandler = async (
 
     const masked = transactions.map((tx: any) => ({
       ...tx,
-      phoneNumber:
-        typeof tx.phoneNumber === "string"
-          ? `****${tx.phoneNumber.slice(-4)}`
-          : tx.phoneNumber,
-      phone_number:
-        typeof tx.phone_number === "string"
-          ? `****${tx.phone_number.slice(-4)}`
-          : tx.phone_number,
+      phoneNumber: maskPhoneNumber(tx.phoneNumber),
+      phone_number: maskPhoneNumber(tx.phone_number),
     }));
 
     const body: PhoneSearchResponse = {
@@ -695,7 +794,10 @@ export const listTransactionsHandler = async (req: Request, res: Response) => {
         currentPage: Math.floor(filters.offset / filters.limit) + 1,
       },
       filters: {
-        statuses: filters.statuses.length > 0 ? filters.statuses : Object.values(TransactionStatus),
+        statuses:
+          filters.statuses.length > 0
+            ? filters.statuses
+            : Object.values(TransactionStatus),
       },
     });
   } catch (err) {
@@ -729,7 +831,11 @@ export const listAmlAlertsHandler = async (req: Request, res: Response) => {
     }
 
     const alerts = amlService.getAlerts({
-      status: statusFilter as "pending_review" | "reviewed" | "dismissed" | undefined,
+      status: statusFilter as
+        | "pending_review"
+        | "reviewed"
+        | "dismissed"
+        | undefined,
       userId: typeof userId === "string" ? userId : undefined,
       startDate: parsedStart,
       endDate: parsedEnd,
@@ -738,7 +844,8 @@ export const listAmlAlertsHandler = async (req: Request, res: Response) => {
     return res.json({
       data: alerts,
       total: alerts.length,
-      pendingReview: alerts.filter((a: any) => a.status === "pending_review").length,
+      pendingReview: alerts.filter((a: any) => a.status === "pending_review")
+        .length,
     });
   } catch (error) {
     console.error("Failed to list AML alerts:", error);

@@ -24,9 +24,16 @@ const isIpAllowed = (rawIp: string): boolean => {
   try {
     const parsed = ipaddr.process(rawIp);
 
-    return allowedNetworks.some(([network, prefix]) =>
-      parsed.match(network, prefix),
-    );
+    return allowedNetworks.some(([network, prefix]) => {
+      if (parsed.kind() !== network.kind()) {
+        return false;
+      }
+
+      const matchable = parsed as unknown as {
+        match(candidate: unknown, bits: number): boolean;
+      };
+      return matchable.match(network, prefix);
+    });
   } catch {
     return false;
   }

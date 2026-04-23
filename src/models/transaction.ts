@@ -18,10 +18,12 @@ const MAX_METADATA_BYTES = 10240; // 10 KB
 const TRANSACTION_SELECT_COLUMNS = `
   id,
   reference_number AS "referenceNumber",
+  provider_reference AS "providerReference",
   type,
   amount::text AS amount,
   phone_number AS "phoneNumber",
   provider,
+  provider_reference AS "providerReference",
   stellar_address AS "stellarAddress",
   status,
   COALESCE(tags, '{}') AS tags,
@@ -70,6 +72,7 @@ function validateMetadata(metadata: unknown): Record<string, unknown> {
 export interface Transaction {
   id: string;
   referenceNumber: string;
+  providerReference?: string | null;
   type: "deposit" | "withdraw";
   amount: string;
   /** ISO 4217 currency code of the original transaction amount (default: USD). */
@@ -80,8 +83,13 @@ export interface Transaction {
   convertedAmount?: string;
   phoneNumber: string;
   provider: string;
+providerReference?: string | null;
   stellarAddress: string;
   status: TransactionStatus;
+  // NEW fields
+  assetType: AssetType;
+  assetCode?: string;   // e.g. 'USDC' — only for anchored assets
+  assetIssuer?: string; // issuer address — only for anchored assets
   tags: string[];
   notes?: string;
   adminNotes?: string;
@@ -113,6 +121,7 @@ export interface CreateTransactionInput {
   amount: string | number;
   phoneNumber: string;
   provider: string;
+  providerReference?: string | null;
   stellarAddress: string;
   status: TransactionStatus;
   tags?: string[];
@@ -148,29 +157,31 @@ export function mapTransactionRow(
   const dbRow = row as Record<string, unknown>;
   const created = dbRow.created_at ?? row.createdAt;
   const updated = dbRow.updated_at ?? row.updatedAt;
-  
+
   // Cast to any for easier access to snake_case fields that might be in the object
   const r = row as any;
   const db = dbRow as any;
 
   return {
     id: String(r.id),
-    referenceNumber: String(
-      db.reference_number ?? r.referenceNumber ?? "",
-    ),
+    referenceNumber: String(db.reference_number ?? r.referenceNumber ?? ""),
+    providerReference: db.provider_reference ?? db.providerReference ?? null,
     type: (r.type as Transaction["type"]) || "deposit",
     amount: String(r.amount ?? ""),
-    phoneNumber: decrypt(String(db.phone_number ?? r.phoneNumber ?? "")) as string,
+    phoneNumber: decrypt(
+      String(db.phone_number ?? r.phoneNumber ?? ""),
+    ) as string,
     provider: String(r.provider ?? ""),
-    stellarAddress: decrypt(String(db.stellar_address ?? r.stellarAddress ?? "")) as string,
+    stellarAddress: decrypt(
+      String(db.stellar_address ?? r.stellarAddress ?? ""),
+    ) as string,
     status: r.status as TransactionStatus,
     tags: Array.isArray(r.tags) ? (r.tags as string[]) : [],
     notes: decrypt(db.notes ?? r.notes) ?? undefined,
-    admin_notes: decrypt(db.admin_notes ?? r.admin_notes ?? r.adminNotes) ?? undefined,
+    admin_notes:
+      decrypt(db.admin_notes ?? r.admin_notes ?? r.adminNotes) ?? undefined,
     metadata:
-      r.metadata &&
-      typeof r.metadata === "object" &&
-      !Array.isArray(r.metadata)
+      r.metadata && typeof r.metadata === "object" && !Array.isArray(r.metadata)
         ? (r.metadata as Record<string, unknown>)
         : {},
     locationMetadata:
@@ -204,15 +215,16 @@ export class TransactionModel {
 
     const result = await queryWrite(
       `INSERT INTO transactions (
-           reference_number, type, amount, currency, original_amount, 
+           reference_number, provider_reference, type, amount, currency, original_amount, 
            converted_amount, phone_number, provider, stellar_address, 
            status, tags, notes, user_id, idempotency_key, 
            idempotency_expires_at, metadata, location_metadata
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
         RETURNING *`,
       [
         referenceNumber,
+        data.providerReference ?? null,
         data.type,
         data.amount,
         data.currency ?? "USD",
@@ -220,6 +232,7 @@ export class TransactionModel {
         data.convertedAmount ?? null,
         encrypt(data.phoneNumber),
         data.provider,
+        data.providerReference ?? null,
         encrypt(data.stellarAddress),
         data.status,
         tags,
@@ -247,7 +260,7 @@ export class TransactionModel {
   }
 
   async findById(id: string): Promise<Transaction | null> {
-     const result = await queryRead<Transaction>(
+    const result = await queryRead<Transaction>(
       `SELECT ${TRANSACTION_SELECT_COLUMNS}
         FROM transactions
         WHERE id = $1`,
@@ -269,6 +282,7 @@ export class TransactionModel {
       minAmount?: number;
       maxAmount?: number;
       provider?: string;
+      providerReference?: string;
       tags?: string[];
     },
   ) {
@@ -299,7 +313,11 @@ export class TransactionModel {
     }
     if (filters?.provider) {
       query += " AND provider = $" + p++;
-      params.push(filters.provider);
+      params.push(filters.provider.toLowerCase());
+    }
+    if (filters?.providerReference) {
+      query += " AND provider_reference = $" + p++;
+      params.push(filters.providerReference);
     }
     if (filters?.tags && filters.tags.length > 0) {
       query += " AND tags @> $" + p++ + "::text[]";
@@ -323,6 +341,7 @@ export class TransactionModel {
       minAmount?: number;
       maxAmount?: number;
       provider?: string;
+      providerReference?: string;
       tags?: string[];
     },
   ): Promise<number> {
@@ -350,7 +369,11 @@ export class TransactionModel {
     }
     if (filters?.provider) {
       query += " AND provider = $" + p++;
-      params.push(filters.provider);
+      params.push(filters.provider.toLowerCase());
+    }
+    if (filters?.providerReference) {
+      query += " AND provider_reference = $" + p++;
+      params.push(filters.providerReference);
     }
     if (filters?.tags && filters.tags.length > 0) {
       query += " AND tags @> $" + p++ + "::text[]";

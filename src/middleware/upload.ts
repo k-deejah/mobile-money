@@ -71,7 +71,7 @@ export const upload = multer({
   fileFilter,
   limits: {
     fileSize: MAX_FILE_SIZE,
-    files: 1, // Only allow one file per request
+    files: 10, // Increased to allow multiple standard and custom files per request
   },
 });
 

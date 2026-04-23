@@ -26,6 +26,7 @@ const CreateApplicantSchema = z.object({
       line3: z.string().optional(),
     })
     .optional(),
+  custom_fields: z.record(z.any()).optional(), // Added custom fields support
 });
 
 const UploadDocumentSchema = z.object({

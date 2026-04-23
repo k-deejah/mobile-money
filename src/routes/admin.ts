@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { generateToken } from "../auth/jwt";
-import { updateAdminNotesHandler } from "../controllers/transactionController";
+import { updateAdminNotesHandler, refundTransactionHandler } from "../controllers/transactionController";
 import {
   DashboardConfig,
   validateDashboardConfig,
@@ -690,6 +690,14 @@ router.patch(
   updateAdminNotesHandler,
 );
 
+// POST /api/admin/transactions/:id/refund
+router.post(
+  "/transactions/:id/refund",
+  requireAdmin,
+  logAdminAction("REFUND_TRANSACTION"),
+  refundTransactionHandler,
+);
+
 /**
  * =========================
  * QUEUES & DLQ
@@ -856,5 +864,144 @@ router.get(
   },
 );
 
-export { router as adminRoutes };
+/**
+ * =========================
+ * FINANCIAL DASHBOARD
+ * =========================
+ */
 
+// GET /api/admin/financial/pnl - last 30 days of daily PnL snapshots
+router.get(
+  "/financial/pnl",
+  requireAdmin,
+  async (_req: Request, res: Response) => {
+    try {
+      const { queryRead } = await import("../config/database");
+      const result = await queryRead<{
+        report_date: string;
+        user_fees: string;
+        provider_fees: string;
+        pnl: string;
+      }>(
+        `SELECT report_date, user_fees, provider_fees, pnl
+         FROM daily_pnl_snapshots
+         WHERE report_date >= CURRENT_DATE - INTERVAL '29 days'
+         ORDER BY report_date ASC`,
+        [],
+      );
+
+      const rows = result.rows.map((r) => ({
+        date: r.report_date,
+        feesCollected: parseFloat(r.user_fees),
+        providerCosts: parseFloat(r.provider_fees),
+        netProfit: parseFloat(r.pnl),
+      }));
+
+      const totals = rows.reduce(
+        (acc, r) => ({
+          feesCollected: acc.feesCollected + r.feesCollected,
+          providerCosts: acc.providerCosts + r.providerCosts,
+          netProfit: acc.netProfit + r.netProfit,
+        }),
+        { feesCollected: 0, providerCosts: 0, netProfit: 0 },
+      );
+
+      res.json({ rows, totals });
+    } catch (err) {
+      console.error("[financial/pnl]", err);
+      res.status(500).json({ error: "Failed to fetch PnL data" });
+    }
+  },
+);
+
+// GET /api/admin/financial/dashboard - self-contained HTML dashboard
+router.get(
+  "/financial/dashboard",
+  requireAdmin,
+  (_req: Request, res: Response) => {
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Financial Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;padding:24px}
+  h1{font-size:1.4rem;font-weight:600;margin-bottom:20px;color:#f8fafc}
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:28px}
+  .card{background:#1e293b;border-radius:10px;padding:20px}
+  .card .label{font-size:.75rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+  .card .value{font-size:1.6rem;font-weight:700}
+  .green{color:#34d399}.red{color:#f87171}.blue{color:#60a5fa}
+  .chart-box{background:#1e293b;border-radius:10px;padding:20px}
+  .chart-box h2{font-size:.9rem;color:#94a3b8;margin-bottom:16px;font-weight:500}
+  #status{font-size:.75rem;color:#64748b;margin-top:14px;text-align:right}
+  .error{color:#f87171;padding:20px;background:#1e293b;border-radius:10px}
+</style>
+</head>
+<body>
+<h1>Financial Health — Last 30 Days</h1>
+<div class="cards">
+  <div class="card"><div class="label">Fees Collected</div><div class="value green" id="totalFees">—</div></div>
+  <div class="card"><div class="label">Provider Costs</div><div class="value red" id="totalCosts">—</div></div>
+  <div class="card"><div class="label">Net Profit</div><div class="value blue" id="totalProfit">—</div></div>
+</div>
+<div class="chart-box">
+  <h2>Daily Breakdown</h2>
+  <canvas id="chart" height="90"></canvas>
+</div>
+<div id="status"></div>
+<script>
+const fmt = (n) => '$' + n.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+async function load() {
+  try {
+    const r = await fetch('/api/admin/financial/pnl', {credentials:'include'});
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const {rows, totals} = await r.json();
+
+    document.getElementById('totalFees').textContent = fmt(totals.feesCollected);
+    document.getElementById('totalCosts').textContent = fmt(totals.providerCosts);
+    document.getElementById('totalProfit').textContent = fmt(totals.netProfit);
+    document.getElementById('totalProfit').className = 'value ' + (totals.netProfit >= 0 ? 'green' : 'red');
+
+    const labels = rows.map(r => r.date);
+    new Chart(document.getElementById('chart'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          {label:'Fees Collected', data: rows.map(r=>r.feesCollected), backgroundColor:'rgba(52,211,153,.7)', borderRadius:3},
+          {label:'Provider Costs', data: rows.map(r=>r.providerCosts), backgroundColor:'rgba(248,113,113,.7)', borderRadius:3},
+          {label:'Net Profit', data: rows.map(r=>r.netProfit), type:'line', borderColor:'#60a5fa', backgroundColor:'rgba(96,165,250,.15)', tension:.3, fill:true, pointRadius:3},
+        ]
+      },
+      options: {
+        responsive:true,
+        interaction:{mode:'index',intersect:false},
+        plugins:{legend:{labels:{color:'#94a3b8',font:{size:12}}}},
+        scales:{
+          x:{ticks:{color:'#64748b',maxRotation:45},grid:{color:'rgba(255,255,255,.05)'}},
+          y:{ticks:{color:'#64748b',callback:v=>'\$'+v.toLocaleString()},grid:{color:'rgba(255,255,255,.05)'}}
+        }
+      }
+    });
+
+    document.getElementById('status').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  } catch(e) {
+    document.querySelector('.chart-box').innerHTML = '<div class="error">Failed to load data: ' + e.message + '</div>';
+  }
+}
+
+load();
+setInterval(load, 60000);
+</script>
+</body>
+</html>`);
+  },
+);
+
+export { router as adminRoutes };

@@ -10,6 +10,7 @@ export interface User {
   two_factor_secret?: string | null;
   backup_codes?: string[] | null;
   status: 'active' | 'frozen' | 'suspended';
+  tokenVersion?: number;
   createdAt: Date;
   updatedAt: Date;
   // TODO: The `User` type and database table needs to
@@ -31,6 +32,7 @@ export class UserModel {
       two_factor_secret: decrypt(row.two_factor_secret) ?? null,
       backup_codes: row.backup_codes ?? null,
       status: row.status,
+      tokenVersion: row.token_version ?? 0,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -136,5 +138,15 @@ export class UserModel {
 
     const result = await queryRead(query, [userId]);
     return result.rows;
+  }
+  async incrementTokenVersion(id: string): Promise<number> {
+    const query = `
+      UPDATE users 
+      SET token_version = COALESCE(token_version, 0) + 1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1 
+      RETURNING token_version
+    `;
+    const result = await queryWrite(query, [id]);
+    return result.rows[0]?.token_version || 0;
   }
 }

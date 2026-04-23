@@ -112,4 +112,31 @@ export class MTNProvider {
   async sendPayout(_phoneNumber: string, _amount: string) {
     return { success: true };
   }
+
+  async getTransactionStatus(
+    referenceId: string,
+  ): Promise<{ status: "completed" | "failed" | "pending" | "unknown" }> {
+    try {
+      const token = await this.getAccessToken();
+      const response = await axios.get(
+        `${this.baseUrl}/collection/v1_0/requesttopay/${encodeURIComponent(referenceId)}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Ocp-Apim-Subscription-Key": this.subscriptionKey,
+            "X-Target-Environment": this.environment,
+          },
+        },
+      );
+      const providerStatus = String(
+        response.data?.status ?? "",
+      ).toUpperCase();
+      if (providerStatus === "SUCCESSFUL") return { status: "completed" };
+      if (providerStatus === "FAILED") return { status: "failed" };
+      if (providerStatus === "PENDING") return { status: "pending" };
+      return { status: "unknown" };
+    } catch {
+      return { status: "unknown" };
+    }
+  }
 }

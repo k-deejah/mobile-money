@@ -15,6 +15,8 @@
 
 import { Dispute } from "../models/dispute";
 import { Transaction } from "../models/transaction";
+import { maskSensitiveData } from "../utils/masking";
+
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -131,25 +133,6 @@ interface IntercomConversationResponse {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function maskSensitiveData(data: string, type: "phone" | "stellar" | "email"): string {
-  if (!data) return "";
-
-  switch (type) {
-    case "phone":
-      if (data.length <= 4) return data;
-      return `${data.slice(0, -4).replace(/\d/g, "*")}${data.slice(-4)}`;
-    case "stellar":
-      if (data.length <= 8) return data;
-      return `${data.slice(0, 4)}...${data.slice(-4)}`;
-    case "email":
-      const [localPart, domain] = data.split("@");
-      if (!domain) return data;
-      return `${localPart.slice(0, 2)}${"*".repeat(Math.max(localPart.length - 2, 3))}@${domain}`;
-    default:
-      return data;
-  }
 }
 
 function formatTransactionDetails(txn: TransactionMetadata): string {

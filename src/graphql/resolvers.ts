@@ -76,7 +76,9 @@ function toGraphQLError(err: unknown, fallback: string): GraphQLError {
     lower.includes("cannot assign") ||
     lower.includes("only allowed for completed")
   ) {
-    return new GraphQLError(message, { extensions: { code: "BAD_USER_INPUT" } });
+    return new GraphQLError(message, {
+      extensions: { code: "BAD_USER_INPUT" },
+    });
   }
   return new GraphQLError(message, { extensions: { code: "INTERNAL" } });
 }
@@ -162,7 +164,13 @@ export const resolvers = {
 
     disputeReport: async (
       _parent: unknown,
-      args: { filter?: { from?: string | null; to?: string | null; assignedTo?: string | null } | null },
+      args: {
+        filter?: {
+          from?: string | null;
+          to?: string | null;
+          assignedTo?: string | null;
+        } | null;
+      },
       ctx: GraphQLContext,
     ) => {
       const filter: ReportFilter = {};
@@ -235,7 +243,10 @@ export const resolvers = {
       },
       ctx: GraphQLContext,
     ) => {
-      const { amount, phoneNumber, provider, stellarAddress } = args.input;
+      const { amount, phoneNumber, stellarAddress } = args.input;
+
+      const provider = args.input.provider?.toLowerCase();
+
       try {
         return await ctx.lockManager.withLock(
           ctx.LockKeys.phoneNumber(phoneNumber),
@@ -260,7 +271,7 @@ export const resolvers = {
             const mapped = mapTransactionRow(
               transaction as unknown as Record<string, unknown>,
             );
-            
+
             // Publish transaction created event
             const createdPayload: TransactionCreatedPayload = {
               id: mapped.id,
@@ -274,8 +285,11 @@ export const resolvers = {
               tags: mapped.tags,
               createdAt: mapped.createdAt,
             };
-            ctx.pubsub.publish(SubscriptionChannels.TRANSACTION_CREATED, createdPayload);
-            
+            ctx.pubsub.publish(
+              SubscriptionChannels.TRANSACTION_CREATED,
+              createdPayload,
+            );
+
             return {
               transactionId: mapped.id,
               referenceNumber: mapped.referenceNumber,
@@ -333,7 +347,7 @@ export const resolvers = {
         const mapped = mapTransactionRow(
           transaction as unknown as Record<string, unknown>,
         );
-        
+
         // Publish transaction created event
         const createdPayload: TransactionCreatedPayload = {
           id: mapped.id,
@@ -347,8 +361,11 @@ export const resolvers = {
           tags: mapped.tags,
           createdAt: mapped.createdAt,
         };
-        ctx.pubsub.publish(SubscriptionChannels.TRANSACTION_CREATED, createdPayload);
-        
+        ctx.pubsub.publish(
+          SubscriptionChannels.TRANSACTION_CREATED,
+          createdPayload,
+        );
+
         return {
           transactionId: mapped.id,
           referenceNumber: mapped.referenceNumber,
@@ -383,7 +400,7 @@ export const resolvers = {
           reason.trim(),
           reportedBy ?? undefined,
         );
-        
+
         // Publish dispute created event
         const createdPayload: DisputeCreatedPayload = {
           id: d.id,
@@ -393,8 +410,11 @@ export const resolvers = {
           reportedBy: d.reportedBy,
           createdAt: d.createdAt.toISOString(),
         };
-        ctx.pubsub.publish(SubscriptionChannels.DISPUTE_CREATED, createdPayload);
-        
+        ctx.pubsub.publish(
+          SubscriptionChannels.DISPUTE_CREATED,
+          createdPayload,
+        );
+
         return formatDispute(d);
       } catch (err) {
         throw toGraphQLError(err, "Failed to open dispute");
@@ -428,7 +448,7 @@ export const resolvers = {
           assignedTo ?? undefined,
         );
         const full = await ctx.disputeService.getDispute(disputeId);
-        
+
         // Publish dispute updated event
         const updatedPayload: DisputeUpdatedPayload = {
           id: full.id,
@@ -437,8 +457,11 @@ export const resolvers = {
           resolution: full.resolution,
           updatedAt: full.updatedAt.toISOString(),
         };
-        ctx.pubsub.publish(SubscriptionChannels.DISPUTE_UPDATED, updatedPayload);
-        
+        ctx.pubsub.publish(
+          SubscriptionChannels.DISPUTE_UPDATED,
+          updatedPayload,
+        );
+
         return formatDispute(full);
       } catch (err) {
         throw toGraphQLError(err, "Failed to update dispute");
@@ -459,7 +482,7 @@ export const resolvers = {
       try {
         await ctx.disputeService.assignToAgent(disputeId, agentName.trim());
         const full = await ctx.disputeService.getDispute(disputeId);
-        
+
         // Publish dispute updated event
         const updatedPayload: DisputeUpdatedPayload = {
           id: full.id,
@@ -468,8 +491,11 @@ export const resolvers = {
           resolution: full.resolution,
           updatedAt: full.updatedAt.toISOString(),
         };
-        ctx.pubsub.publish(SubscriptionChannels.DISPUTE_UPDATED, updatedPayload);
-        
+        ctx.pubsub.publish(
+          SubscriptionChannels.DISPUTE_UPDATED,
+          updatedPayload,
+        );
+
         return formatDispute(full);
       } catch (err) {
         throw toGraphQLError(err, "Failed to assign dispute");
@@ -500,7 +526,7 @@ export const resolvers = {
           author.trim(),
           note.trim(),
         );
-        
+
         // Publish dispute note added event
         const notePayload: DisputeNoteAddedPayload = {
           id: created.id,
@@ -509,8 +535,11 @@ export const resolvers = {
           note: created.note,
           createdAt: created.createdAt.toISOString(),
         };
-        ctx.pubsub.publish(SubscriptionChannels.DISPUTE_NOTE_ADDED, notePayload);
-        
+        ctx.pubsub.publish(
+          SubscriptionChannels.DISPUTE_NOTE_ADDED,
+          notePayload,
+        );
+
         return formatNote(created);
       } catch (err) {
         throw toGraphQLError(err, "Failed to add note");
@@ -541,4 +570,6 @@ function getSubscriptionPubSub() {
   return subscriptionPubSub;
 }
 
-export const subscriptionResolvers = createSubscriptionResolvers(getSubscriptionPubSub());
+export const subscriptionResolvers = createSubscriptionResolvers(
+  getSubscriptionPubSub(),
+);

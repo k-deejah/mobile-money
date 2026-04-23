@@ -1,5 +1,7 @@
 import PDFDocument from "pdfkit";
 import { Transaction } from "../models/transaction";
+import { maskPhoneNumber, maskStellarAddress } from "../utils/masking";
+
 
 export async function generateTransactionPdfBuffer(
   transaction: Transaction,
@@ -38,9 +40,9 @@ export async function generateTransactionPdfBuffer(
 
       doc.fontSize(10).text(`Type: ${transaction.type}`, leftX, doc.y + 6);
       doc.text(`Provider: ${transaction.provider}`, leftX);
-      doc.text(`Phone: ${transaction.phoneNumber}`, leftX);
+      doc.text(`Phone: ${maskPhoneNumber(transaction.phoneNumber)}`, leftX);
       if (transaction.stellarAddress)
-        doc.text(`Stellar: ${transaction.stellarAddress}`, leftX);
+        doc.text(`Stellar: ${maskStellarAddress(transaction.stellarAddress)}`, leftX);
 
       const amountStr = transaction.amount;
       doc.fontSize(12).text(`Amount`, rightX, 140, { continued: false });

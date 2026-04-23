@@ -1,6 +1,8 @@
 import { Pool, PoolClient } from "pg";
 import { pool } from "../config/database";
 import { encrypt, decrypt } from "../utils/encryption";
+import { flushUserSessions } from "../config/redis";
+import { UserModel } from "../models/users";
 
 export interface User {
   id: string;
@@ -9,6 +11,8 @@ export interface User {
   role_id?: string;
   role_name?: string;
   two_factor_secret?: string | null;
+  two_factor_enabled?: boolean;
+  two_factor_verified?: boolean;
   backup_codes?: string[] | null;
   created_at: Date;
   updated_at: Date;
@@ -39,6 +43,8 @@ export async function getUserByPhoneNumber(
       u.kyc_level,
       u.role_id,
       u.two_factor_secret,
+      u.two_factor_enabled,
+      u.two_factor_verified,
       u.backup_codes,
       u.created_at,
       u.updated_at,
@@ -70,6 +76,8 @@ export async function getUserById(userId: string): Promise<User | null> {
       u.kyc_level,
       u.role_id,
       u.two_factor_secret,
+      u.two_factor_enabled,
+      u.two_factor_verified,
       u.backup_codes,
       u.created_at,
       u.updated_at,
@@ -114,7 +122,7 @@ export async function createUser(userData: CreateUserRequest): Promise<User> {
   const query = `
     INSERT INTO users (phone_number, kyc_level, role_id)
     VALUES ($1, $2, $3)
-    RETURNING id, phone_number, kyc_level, role_id, two_factor_secret, backup_codes, created_at, updated_at
+    RETURNING id, phone_number, kyc_level, role_id, two_factor_secret, two_factor_enabled, two_factor_verified, backup_codes, created_at, updated_at
   `;
 
   const encryptedPhone = encrypt(phone_number, true);
@@ -320,6 +328,8 @@ export async function getAllUsers(): Promise<User[]> {
       u.kyc_level,
       u.role_id,
       u.two_factor_secret,
+      u.two_factor_enabled,
+      u.two_factor_verified,
       u.backup_codes,
       u.created_at,
       u.updated_at,
@@ -351,4 +361,26 @@ export async function getUserPermissions(userId: string): Promise<string[]> {
 
   const result = await pool.query(query, [userId]);
   return result.rows.map((row) => row.permission_name);
+}
+
+export async function invalidateUserOnPasswordChange(userId: string): Promise<void> {
+  const userModel = new UserModel();
+  
+  // 1. Increment DB token version (persisted invalidation)
+  try {
+    await userModel.incrementTokenVersion(userId);
+  } catch (error: any) {
+    // Graceful fallback: Ignore missing column error if the DB migration hasn't run yet
+    if (error.code !== '42703') throw error; 
+  }
+
+  // 2. Revoke all refresh token families
+  try {
+    await pool.query(`UPDATE refresh_token_families SET is_revoked = true WHERE user_id = $1`, [userId]);
+  } catch (error) {
+    console.error("Failed to revoke refresh tokens:", error);
+  }
+
+  // 3. Flush Redis express-sessions and flag active stateless JWTs
+  await flushUserSessions(userId);
 }

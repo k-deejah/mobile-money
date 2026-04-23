@@ -1,5 +1,9 @@
 import passport from "passport";
-import { Strategy as SamlStrategy, VerifiedCallback } from "passport-saml";
+import {
+  Strategy as SamlStrategy,
+  VerifiedCallback,
+  Profile as SamlProfile,
+} from "passport-saml";
 import { Request, Response, NextFunction, Router } from "express";
 import { pool } from "../config/database";
 import { generateToken, generateRefreshToken } from "./jwt";
@@ -144,26 +148,29 @@ export class SSOService {
     };
 
     const strategy = new SamlStrategy(
-      samlConfig,
-      async (
-        profile: SSOUserProfile,
+      samlConfig as any,
+      (async (
+        profile: SamlProfile | null | undefined,
         done: VerifiedCallback
       ) => {
         try {
+          if (!profile?.nameID) {
+            return done(new Error("SAML profile is missing nameID"));
+          }
+
           // Process SSO profile and create/update user
-          const user = await this.processSSOProfile(profile, provider.id);
+          const user = await this.processSSOProfile(
+            profile as SSOUserProfile,
+            provider.id,
+          );
           return done(null, user);
         } catch (error) {
           return done(error as Error);
         }
-      },
-      (profile: SSOUserProfile, done: VerifiedCallback) => {
-        // Logout callback - handle SLO if needed
-        return done(null, profile);
-      }
+      }) as any
     );
 
-    passport.use(`saml-${provider.id}`, strategy);
+    passport.use(`saml-${provider.id}`, strategy as unknown as passport.Strategy);
     console.log(`[SSO] Configured SAML strategy for provider: ${provider.name}`);
   }
 
@@ -173,7 +180,7 @@ export class SSOService {
   private async processSSOProfile(
     profile: SSOUserProfile,
     providerId: string
-  ): Promise<Express.User> {
+  ): Promise<Record<string, unknown>> {
     const client = await pool.connect();
 
     try {
@@ -357,7 +364,10 @@ export class SSOService {
    * Get SAML strategy for a specific provider
    */
   public getStrategy(providerId: string): SamlStrategy | null {
-    return passport._strategy(`saml-${providerId}`) as SamlStrategy | null;
+    const strategyRegistry = passport as unknown as {
+      _strategy(name: string): unknown;
+    };
+    return strategyRegistry._strategy(`saml-${providerId}`) as SamlStrategy | null;
   }
 
   /**

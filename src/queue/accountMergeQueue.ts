@@ -34,7 +34,7 @@ export async function addAccountMergeJob(
     jobId?: string;
   },
 ) {
-  const jobId = options?.jobId ?? `account-merge-${data.sourcePublicKey}-${Date.now()}`;
+  const jobId = options?.jobId ?? `account-merge-${Date.now()}`;
   return await accountMergeQueue.add("merge-account", data, {
     jobId,
     priority: options?.priority,

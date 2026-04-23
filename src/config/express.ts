@@ -274,7 +274,7 @@ export const helmetOptions: HelmetOptions = {
  *
  * Reference: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Permissions-Policy
  */
-function permissionsPolicyMiddleware(
+export function permissionsPolicyMiddleware(
   _req: Request,
   res: Response,
   next: NextFunction,
@@ -306,7 +306,7 @@ function permissionsPolicyMiddleware(
  * Middleware that sets the `Report-To` header required by the CSP `report-to`
  * directive.  Only attached when CSP_REPORT_URI is configured.
  */
-function reportToMiddleware(
+export function reportToMiddleware(
   req: Request,
   res: Response,
   next: NextFunction,
