@@ -41,6 +41,9 @@ export const ERROR_CODES = {
     DUPLICATE_REQUEST: "DUPLICATE_REQUEST",
     TRANSACTION_EXISTS: "TRANSACTION_EXISTS",
   
+    // Security / abuse-prevention errors (4290-4299) - HTTP 429
+    ACCOUNT_LOCKED: "ACCOUNT_LOCKED",
+
     // Business logic errors (4200-4299) - Various
     LIMIT_EXCEEDED: "LIMIT_EXCEEDED",
     INSUFFICIENT_BALANCE: "INSUFFICIENT_BALANCE",
@@ -117,7 +120,11 @@ export const ERROR_CODES = {
     ) {
       return 409;
     }
-    if (code === ERROR_CODES.LIMIT_EXCEEDED || code === ERROR_CODES.RATE_LIMIT) {
+    if (
+      code === ERROR_CODES.LIMIT_EXCEEDED ||
+      code === ERROR_CODES.RATE_LIMIT ||
+      code === ERROR_CODES.ACCOUNT_LOCKED
+    ) {
       return 429;
     }
     if (code === ERROR_CODES.PROVIDER_ERROR) {

@@ -4,7 +4,15 @@ import { createSSORouter } from '../auth/sso';
 import { enforceSSOForEmployees } from '../middleware/ssoEnforcement';
 import { tokenController } from '../controllers/tokenController';
 import { authenticateToken } from '../middleware/auth';
-import { authenticateUser, getUserPermissions } from '../services/userService';
+import { authenticateUser, getUserPermissions, getUserByPhoneNumber } from '../services/userService';
+import {
+  getLockoutStatus,
+  recordFailedAttempt,
+  recordSuccessfulLogin,
+} from '../auth/lockout';
+import { EmailService } from '../services/email';
+
+const emailService = new EmailService();
 
 export const authRoutes = Router();
 
@@ -13,9 +21,10 @@ authRoutes.use('/sso', createSSORouter());
 
 /**
  * POST /api/auth/login
- * 
- * Example login endpoint that generates a JWT token
- * In a real application, this would validate user credentials against a database
+ *
+ * Authenticates a user and returns JWT + refresh token.
+ * Enforces account lockout after 5 failed attempts within 10 minutes.
+ * Sends an email notification when an account is locked.
  */
 authRoutes.post('/login', async (req: Request, res: Response) => {
   const { phone_number } = req.body;
@@ -27,15 +36,64 @@ authRoutes.post('/login', async (req: Request, res: Response) => {
     });
   }
 
+  // Use the phone number as the lockout identifier.
+  const lockoutId = phone_number;
+
   try {
+    // ── 1. Gate: reject immediately if the account is already locked ──────────
+    const lockoutStatus = await getLockoutStatus(lockoutId);
+    if (lockoutStatus.isLocked) {
+      return res.status(429).json({
+        error: 'ACCOUNT_LOCKED',
+        message:
+          `Your account is temporarily locked. ` +
+          `Please try again in ${lockoutStatus.minutesRemaining} minute${lockoutStatus.minutesRemaining === 1 ? '' : 's'}.`,
+        unlocksAt: lockoutStatus.unlocksAt,
+        minutesRemaining: lockoutStatus.minutesRemaining,
+      });
+    }
+
+    // ── 2. Attempt authentication ─────────────────────────────────────────────
     const user = await authenticateUser(phone_number);
 
     if (!user) {
+      // ── 3a. Authentication failed: record the attempt ──────────────────────
+      const result = await recordFailedAttempt(lockoutId);
+
+      if (result.justLocked) {
+        // ── 3b. Account just got locked: send notification email ───────────
+        // Best-effort: look up the user's email to notify them.
+        try {
+          const userRecord = await getUserByPhoneNumber(phone_number);
+          const userEmail = (userRecord as any)?.email as string | undefined;
+          if (userEmail) {
+            void emailService.sendAccountLockoutNotification(userEmail, {
+              minutesRemaining: result.lockoutStatus.minutesRemaining ?? 30,
+              unlocksAt: result.lockoutStatus.unlocksAt ?? new Date(),
+              ipAddress: req.ip,
+            });
+          }
+        } catch (emailErr) {
+          console.error('[Login] Failed to send lockout notification:', emailErr);
+        }
+
+        return res.status(429).json({
+          error: 'ACCOUNT_LOCKED',
+          message: result.message,
+          unlocksAt: result.lockoutStatus.unlocksAt,
+          minutesRemaining: result.lockoutStatus.minutesRemaining,
+        });
+      }
+
       return res.status(401).json({
         error: 'Unauthorized',
-        message: 'Invalid credentials',
+        message: result.message,
+        attemptsRemaining: result.lockoutStatus.attemptsRemaining,
       });
     }
+
+    // ── 4. Authentication succeeded: clear lockout state ─────────────────────
+    await recordSuccessfulLogin(lockoutId);
 
     const payload = {
       userId: user.id,
