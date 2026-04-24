@@ -66,6 +66,7 @@ import { validateStellarNetwork, logStellarNetwork } from "./config/stellar";
 import { sessionAnomalyLogger } from "./services/logger";
 import { HealthCheckResponse, ReadinessCheckResponse } from "./types/api";
 import { privacyRoutes } from "./routes/privacy";
+import { developerDashboardRoutes } from "./routes/developerDashboard";
 import { travelRuleRoutes } from "./routes/travelRule";
 import sep31Router from "./stellar/sep31";
 import sep24Router from "./stellar/sep24";
@@ -359,6 +360,7 @@ app.use("/api/stellar", stellarRoutes);
 
 // GDPR
 app.use("/api/gdpr", privacyRoutes);
+app.use("/api/developer", developerDashboardRoutes);
 app.use("/api/admin", requireAuth, adminRoutes);
 app.use("/api/admin/kyc-upgrades", requireAuth, kycTierUpgradeRoutes);
 app.use("/sep10", createSep10Router());
