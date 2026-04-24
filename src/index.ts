@@ -73,6 +73,7 @@ import { createSep12Router } from "./stellar/sep12";
 import { createSep10Router } from "./stellar/sep10";
 import tomlRouter from "./routes/toml";
 import { startJobs } from "./jobs/scheduler";
+import accountingRoutes from "./routes/accounting";
 
 // 1. Import Sentry Middleware
 import { initSentry, sentryBreadcrumbMiddleware } from "./middleware/sentry";
@@ -350,6 +351,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/kyc", createKYCRoutes(pool));
 app.use("/api/audit", auditRoutes);
 
+app.use("/api/accounting", accountingRoutes);
 app.use("/api/stellar", stellarRoutes);
 
 // GDPR

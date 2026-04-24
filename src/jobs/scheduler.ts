@@ -11,6 +11,7 @@ import { MonitoringService } from "../services/monitoringService";
 import { createPagerDutyService } from "../services/pagerDutyService";
 import { runProviderBalanceAlertJob } from "./balances";
 import { runProviderHealthCheckJob } from "./providerHealthCheck";
+import { runAccountingWebhookJob } from "./accountingWebhookJob";
 
 interface JobConfig {
   name: string;
@@ -72,6 +73,12 @@ const JOBS: JobConfig[] = [
     // Every 5 minutes - polls provider APIs for uptime and alerts on outages
     schedule: process.env.PROVIDER_HEALTH_CHECK_CRON || "*/5 * * * *",
     handler: runProviderHealthCheckJob,
+  },
+  {
+    name: "accounting-webhook",
+    // Every minute - syncs completed transactions to QuickBooks / Xero
+    schedule: process.env.ACCOUNTING_WEBHOOK_CRON || "* * * * *",
+    handler: runAccountingWebhookJob,
   },
 ];
 

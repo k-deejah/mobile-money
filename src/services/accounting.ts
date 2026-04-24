@@ -833,4 +833,118 @@ export class AccountingService {
     const mapping = mappings.find(m => m.mobileMoneyCategory === mobileMoneyCategory);
     return mapping ? mapping.accountingCategoryId : null;
   }
+
+  /**
+   * Sync a single completed transaction to all active accounting connections for the user.
+   * Called automatically when a transaction.completed event fires.
+   */
+  async syncTransaction(transaction: {
+    id: string;
+    userId: string;
+    type: string;
+    amount: number;
+    fee: number;
+    currency: string;
+    referenceNumber: string;
+    provider: string;
+    createdAt: Date;
+  }): Promise<void> {
+    const connections = await this.getUserConnections(transaction.userId);
+    if (connections.length === 0) return;
+
+    for (const connection of connections) {
+      await this.ensureValidToken(connection.id);
+      const fresh = await this.getConnection(connection.id);
+      if (!fresh) continue;
+
+      const txnDate = transaction.createdAt.toISOString().split("T")[0];
+      const description = `${transaction.type} - ref:${transaction.referenceNumber} via ${transaction.provider}`;
+
+      try {
+        if (connection.provider === AccountingProvider.QUICKBOOKS) {
+          await axios.post(
+            `https://quickbooks.api.intuit.com/v3/company/${fresh.realmId}/journalentry`,
+            {
+              TxnDate: txnDate,
+              PrivateNote: transaction.id,
+              Line: [
+                {
+                  Description: description,
+                  Amount: transaction.amount,
+                  DetailType: "JournalEntryLineDetail",
+                  JournalEntryLineDetail: {
+                    PostingType: "Credit",
+                    AccountRef: { value: "1" }, // Sales / Revenue
+                  },
+                },
+                ...(transaction.fee > 0
+                  ? [
+                      {
+                        Description: `Fee - ${description}`,
+                        Amount: transaction.fee,
+                        DetailType: "JournalEntryLineDetail",
+                        JournalEntryLineDetail: {
+                          PostingType: "Debit",
+                          AccountRef: { value: "4" }, // Expense
+                        },
+                      },
+                    ]
+                  : []),
+              ],
+            },
+            {
+              headers: {
+                Authorization: `Bearer ${fresh.accessToken}`,
+                "Content-Type": "application/json",
+              },
+            }
+          );
+        } else if (connection.provider === AccountingProvider.XERO) {
+          const journalLines: object[] = [
+            {
+              Description: description,
+              CreditAmount: transaction.amount,
+              AccountID: "revenue-account-id", // overridden by category mapping if set
+            },
+          ];
+          if (transaction.fee > 0) {
+            journalLines.push({
+              Description: `Fee - ${description}`,
+              DebitAmount: transaction.fee,
+              AccountID: "expense-account-id",
+            });
+          }
+          await axios.put(
+            "https://api.xero.com/api.xro/2.0/ManualJournals",
+            { Date: txnDate, Narration: transaction.id, JournalLines: journalLines },
+            {
+              headers: {
+                Authorization: `Bearer ${fresh.accessToken}`,
+                "Xero-tenant-id": fresh.tenantId,
+                "Content-Type": "application/json",
+              },
+            }
+          );
+        }
+
+        await pool.query(
+          `INSERT INTO accounting_sync_queue
+             (transaction_id, connection_id, status, synced_at)
+           VALUES ($1, $2, 'synced', NOW())
+           ON CONFLICT (transaction_id, connection_id) DO UPDATE
+             SET status = 'synced', synced_at = NOW()`,
+          [transaction.id, connection.id]
+        );
+      } catch (err) {
+        await pool.query(
+          `INSERT INTO accounting_sync_queue
+             (transaction_id, connection_id, status, error_message, synced_at)
+           VALUES ($1, $2, 'failed', $3, NOW())
+           ON CONFLICT (transaction_id, connection_id) DO UPDATE
+             SET status = 'failed', error_message = $3, synced_at = NOW()`,
+          [transaction.id, connection.id, err instanceof Error ? err.message : String(err)]
+        );
+      }
+    }
+  }
 }
