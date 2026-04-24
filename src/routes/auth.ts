@@ -1,15 +1,45 @@
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { generateToken, verifyToken, JWTPayload, generateRefreshToken, verifyRefreshToken } from '../auth/jwt';
 import { createSSORouter } from '../auth/sso';
 import { createOIDCRouter, initializeOIDCProviders } from '../auth/oidc';
 import { enforceSSOForEmployees } from '../middleware/ssoEnforcement';
 import { tokenController } from '../controllers/tokenController';
 import { authenticateToken } from '../middleware/auth';
-import { authenticateUser, getUserPermissions, User } from '../services/userService';
+import { authenticateUser, createUser, getUserPermissions, User } from '../services/userService';
 import { verifyTOTPToken, verifyBackupCode, is2FAEnabled } from '../auth/2fa';
 import { evaluateAdminLoginAnomaly } from '../services/loginAnomaly';
+import { validateRequest } from '../middleware/validation';
+import { hashPassword } from '../utils/password';
 
 export const authRoutes = Router();
+
+export const registerSchema = z.object({
+  phone_number: z.string().min(1, 'phone_number is required'),
+  password: z
+    .string()
+    .min(12, 'Password must be at least 12 characters')
+    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+    .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character'),
+});
+
+/**
+ * POST /api/auth/register
+ */
+authRoutes.post('/register', validateRequest(registerSchema), async (req: Request, res: Response) => {
+  const { phone_number, password } = req.body as z.infer<typeof registerSchema>;
+  try {
+    const passwordHash = await hashPassword(password);
+    const user = await createUser({ phone_number, password_hash: passwordHash } as any);
+    res.status(201).json({ message: 'User registered successfully', userId: user.id });
+  } catch (error) {
+    res.status(500).json({
+      error: 'Registration failed',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
 
 // Initialize OIDC Strategy (Google/Azure)
 initializeOIDCProviders();
