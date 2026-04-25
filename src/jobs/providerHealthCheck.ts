@@ -1,4 +1,5 @@
 import { checkMobileMoneyHealth } from "../services/mobilemoney/providers/healthCheck";
+import { checkAndResetCircuitBreaker } from "../utils/circuitBreaker";
 
 interface ProviderHealthAlert {
   alertType: "provider_health_status";
@@ -54,6 +55,19 @@ export async function runProviderHealthCheckJob(): Promise<void> {
 
       if (health.status === "down") {
         downProviders.push(providerName);
+      } else {
+        // Provider is up, try to reset circuit breakers
+        const operations = ["requestPayment", "sendPayout"];
+        for (const operation of operations) {
+          try {
+            const reset = await checkAndResetCircuitBreaker(providerName, operation);
+            if (reset) {
+              console.log(`[provider-health] Reset circuit breaker for ${providerName}:${operation}`);
+            }
+          } catch (error) {
+            console.error(`[provider-health] Failed to reset breaker for ${providerName}:${operation}: ${toErrorMessage(error)}`);
+          }
+        }
       }
     }
 
